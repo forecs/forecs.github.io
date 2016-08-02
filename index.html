@@ -61,53 +61,10 @@
       <div class="outer">
         <section id="main">
   
-    <article id="post-rabbitmq-troubleshooting" class="article article-type-post" itemscope itemprop="blogPost">
-  <div class="article-meta">
-    <a href="/2016/08/02/rabbitmq-troubleshooting/" class="article-date">
-  <time datetime="2016-08-02T06:15:14.288Z" itemprop="datePublished">2016-08-02</time>
-</a>
-    
-  </div>
-  <div class="article-inner">
-    
-    
-      <header class="article-header">
-        
-  
-    <h1 itemprop="name">
-      <a class="article-title" href="/2016/08/02/rabbitmq-troubleshooting/">Rabbitmq trouble-shooting</a>
-    </h1>
-  
-
-      </header>
-    
-    <div class="article-entry" itemprop="articleBody">
-      
-        <h2 id="To-check-this-fault-execute-the-following-command"><a href="#To-check-this-fault-execute-the-following-command" class="headerlink" title="To check this fault, execute the following command:"></a>To check this fault, execute the following command:</h2><figure class="highlight bash"><table><tr><td class="gutter"><pre><div class="line">1</div></pre></td><td class="code"><pre><div class="line">$ crm_mon -1 r</div></pre></td></tr></table></figure>
-<h3 id="If-everything-is-fine-with-RabbitMQ-you-will-see"><a href="#If-everything-is-fine-with-RabbitMQ-you-will-see" class="headerlink" title="If everything is fine with RabbitMQ you will see:"></a>If everything is fine with RabbitMQ you will see:</h3><figure class="highlight bash"><table><tr><td class="gutter"><pre><div class="line">1</div><div class="line">2</div><div class="line">3</div></pre></td><td class="code"><pre><div class="line">Master/Slave Set: master_p_rabbitmq-server [p_rabbitmq-server]</div><div class="line">Masters: [ cic-3.domain.tld ]</div><div class="line">Slaves: [ cic-1.domain.tld cic-2.domain.tld ]</div></pre></td></tr></table></figure>
-<h3 id="If-rabbitmqctl-cluster-status-shows-this-node-is-down"><a href="#If-rabbitmqctl-cluster-status-shows-this-node-is-down" class="headerlink" title="If rabbitmqctl cluster_status - shows this node is down:"></a>If rabbitmqctl cluster_status - shows this node is down:</h3><pre><code class="bash">Cluster status of node <span class="string">'rabbit@cic-2'</span> ...
-Error: unable to connect to node <span class="string">'rabbit@cic-2'</span>: nodedown
-</code></pre>
-<h2 id="Restart-the-RabbitMQ-node-on-the-vCIC-where-it-is-down-with-this-command"><a href="#Restart-the-RabbitMQ-node-on-the-vCIC-where-it-is-down-with-this-command" class="headerlink" title="Restart the RabbitMQ node on the vCIC where it is down with this command:"></a>Restart the RabbitMQ node on the vCIC where it is down with this command:</h2><pre><code class="bash">crm resource restart p_rabbitmq-server
-</code></pre>
-
-      
-    </div>
-    <footer class="article-footer">
-      <a data-url="http://forecs.github.io/2016/08/02/rabbitmq-troubleshooting/" data-id="cird2vkpy0001pylvf1jqznl5" class="article-share-link">Share</a>
-      
-      
-    </footer>
-  </div>
-  
-</article>
-
-
-  
     <article id="post-hello-world" class="article article-type-post" itemscope itemprop="blogPost">
   <div class="article-meta">
     <a href="/2016/08/02/hello-world/" class="article-date">
-  <time datetime="2016-08-02T03:14:51.743Z" itemprop="datePublished">2016-08-02</time>
+  <time datetime="2016-08-02T06:40:45.275Z" itemprop="datePublished">2016-08-02</time>
 </a>
     
   </div>
@@ -139,7 +96,50 @@ Error: unable to connect to node <span class="string">'rabbit@cic-2'</span>: nod
       
     </div>
     <footer class="article-footer">
-      <a data-url="http://forecs.github.io/2016/08/02/hello-world/" data-id="cird2vkpq0000pylvebfus3tg" class="article-share-link">Share</a>
+      <a data-url="http://forecs.github.io/2016/08/02/hello-world/" data-id="cird5gdun00006elv963haalr" class="article-share-link">Share</a>
+      
+      
+    </footer>
+  </div>
+  
+</article>
+
+
+  
+    <article id="post-rabbitmq-troubleshooting" class="article article-type-post" itemscope itemprop="blogPost">
+  <div class="article-meta">
+    <a href="/2016/08/02/rabbitmq-troubleshooting/" class="article-date">
+  <time datetime="2016-08-02T06:40:45.275Z" itemprop="datePublished">2016-08-02</time>
+</a>
+    
+  </div>
+  <div class="article-inner">
+    
+    
+      <header class="article-header">
+        
+  
+    <h1 itemprop="name">
+      <a class="article-title" href="/2016/08/02/rabbitmq-troubleshooting/">Rabbitmq trouble-shooting</a>
+    </h1>
+  
+
+      </header>
+    
+    <div class="article-entry" itemprop="articleBody">
+      
+        <h2 id="To-check-this-fault-execute-the-following-command"><a href="#To-check-this-fault-execute-the-following-command" class="headerlink" title="To check this fault, execute the following command:"></a>To check this fault, execute the following command:</h2><figure class="highlight bash"><table><tr><td class="gutter"><pre><div class="line">1</div></pre></td><td class="code"><pre><div class="line">$ crm_mon -1 r</div></pre></td></tr></table></figure>
+<h3 id="If-everything-is-fine-with-RabbitMQ-you-will-see"><a href="#If-everything-is-fine-with-RabbitMQ-you-will-see" class="headerlink" title="If everything is fine with RabbitMQ you will see:"></a>If everything is fine with RabbitMQ you will see:</h3><figure class="highlight bash"><table><tr><td class="gutter"><pre><div class="line">1</div><div class="line">2</div><div class="line">3</div></pre></td><td class="code"><pre><div class="line">Master/Slave Set: master_p_rabbitmq-server [p_rabbitmq-server]</div><div class="line">Masters: [ cic-3.domain.tld ]</div><div class="line">Slaves: [ cic-1.domain.tld cic-2.domain.tld ]</div></pre></td></tr></table></figure>
+<h3 id="If-rabbitmqctl-cluster-status-shows-this-node-is-down"><a href="#If-rabbitmqctl-cluster-status-shows-this-node-is-down" class="headerlink" title="If rabbitmqctl cluster_status - shows this node is down:"></a>If rabbitmqctl cluster_status - shows this node is down:</h3><pre><code class="bash">Cluster status of node <span class="string">'rabbit@cic-2'</span> ...
+Error: unable to connect to node <span class="string">'rabbit@cic-2'</span>: nodedown
+</code></pre>
+<h2 id="Restart-the-RabbitMQ-node-on-the-vCIC-where-it-is-down-with-this-command"><a href="#Restart-the-RabbitMQ-node-on-the-vCIC-where-it-is-down-with-this-command" class="headerlink" title="Restart the RabbitMQ node on the vCIC where it is down with this command:"></a>Restart the RabbitMQ node on the vCIC where it is down with this command:</h2><pre><code class="bash">crm resource restart p_rabbitmq-server
+</code></pre>
+
+      
+    </div>
+    <footer class="article-footer">
+      <a data-url="http://forecs.github.io/2016/08/02/rabbitmq-troubleshooting/" data-id="cird5gduu00016elvqrbfizty" class="article-share-link">Share</a>
       
       
     </footer>
@@ -179,11 +179,11 @@ Error: unable to connect to node <span class="string">'rabbit@cic-2'</span>: nod
       <ul>
         
           <li>
-            <a href="/2016/08/02/rabbitmq-troubleshooting/">Rabbitmq trouble-shooting</a>
+            <a href="/2016/08/02/hello-world/">Hello World</a>
           </li>
         
           <li>
-            <a href="/2016/08/02/hello-world/">Hello World</a>
+            <a href="/2016/08/02/rabbitmq-troubleshooting/">Rabbitmq trouble-shooting</a>
           </li>
         
       </ul>
