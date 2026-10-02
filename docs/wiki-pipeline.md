@@ -1,254 +1,259 @@
-# Private review → human merge → public learning wiki
+# Private review → approved export → public learning wiki
 
-## Current installation status — owner action required
+## Installation status (2026-10-02)
 
-The core bridge/builder/tests are implemented. GitHub refused the initial push of
-`.github/workflows/wiki-checks.yml` because the existing native `gh` OAuth login
-lacks **`workflow` scope**. No credential refresh or extra authority was granted.
-To deliver a reviewable private setup PR without installing privileged automation,
-the two workflows are stored only in **`workflow-templates/`**. Templates do not
-execute. All CI/Pages behavior below describes the design **after owner installation**;
-this setup PR has local test/lint/build evidence, not a hosted Actions run.
+The owner made `forecs/forecs.github.io` **public** and explicitly selected a
+**separate private review repository**. `forecs/wiki-review` was absent, so it was
+created **private**, initialized with only a README, and given a reviewable setup
+PR: [private setup #1](https://github.com/forecs/wiki-review/pull/1).
+Public implementation: [public setup #1](https://github.com/forecs/forecs.github.io/pull/1).
+Setup PRs are not content approvals and have not been merged. No real local
+wiki entries or historical drafts were uploaded to either repository.
 
-The full active-workflow version is also retained on a local-only implementation
-branch, but is not a remote PR. No alternate API was used to bypass the scope check.
+The existing native `gh` login is sufficient for repository creation, private
+intake and approved export. It lacks `workflow` scope: the previous active-workflow
+push was rejected. Public workflows remain **uninstalled templates**. No new
+workflow push, alternate API installation, new secret, cross-repo Actions token,
+Control UI connector, scope expansion, scheduler, or Pages activation was attempted.
 
-## State and trust model
+## Trust boundaries
 
-1. **Local source** is private and untrusted data. GitHub-hosted Actions cannot read
-   the local Gateway filesystem; `scripts/wiki_intake.py` is the explicit bridge.
-2. **Review candidate** is a private PR adding/updating exactly two files:
-   `publish_articles/<slug>.md` and `<slug>.json`. Those files do **not** exist on
-   `master` until a human merges the PR. No separate drafts folder is copied into
-   the publishing branch, avoiding a promotion bot with write privileges.
-3. **Approved content** is the exact tree produced by a deliberate human merge to
-   `master`. The merge commit/PR history is the approval record. Body SHA-256 is
-   checked at build time; title + body + slug bind the immutable review version.
-4. **Public site** is an isolated build of `master`, only after a separate owner
-   deployment opt-in. PR checks run tests with synthetic data and validate article
-   structure; they never build/upload a real candidate preview or request Pages
-   privileges. No `pull_request_target`, `workflow_run`, issue-comment execution,
-   scheduled event, auto-merge, approval bot, or content-driven shell command exists.
+1. **Local private source:** `WIKI_SOURCE_ROOT` is set only on the local runner.
+   The repository never stores the absolute source path. Article text is untrusted
+   data; neither bridge executes content. Source Markdown and local state remain
+   private. GitHub-hosted Actions cannot read this local filesystem.
+2. **Private review:** explicit intake targets fixed `forecs/wiki-review` (`main`).
+   One immutable branch/PR proposes only `publish_articles/<slug>.md` and `.json`.
+   Source frontmatter is stripped; no private source paths or intake state are
+   attached. Drafts remain private even if they are rejected or superseded.
+3. **Approval:** a human reviews the entire exact head and deliberately
+   **squash-merges it to private `main`**, approving those bytes for public export.
+   A label, comment, successful check, old review, or unmerged PR is not approval.
+4. **Export:** a local native-gh bridge verifies the immutable reviewed revision,
+   PR merge record, repository identities, default branch ancestry and current
+   approved bytes. It copies only the validated pair into a **new commit based on
+   public `master`** and opens an idempotent public content PR. No private parent
+   commits, merge messages, authorship history, review links/SHAs, or source paths
+   enter that public commit/PR. Destination is fixed, not caller-supplied.
+5. **Public integration/deployment:** a human separately reviews and merges the
+   public content PR. An owner-installed, separately enabled Pages workflow can
+   then build only public default-branch content into an isolated artifact.
 
-### Same-account approval, precisely
+**The public PR itself discloses the article immediately.** Private merge approval
+must authorize that disclosure, not merely saving a private draft. Public PR merge
+and Pages activation are later gates; neither can retract public Git history.
 
-The native `forecs` login can create a private PR, but GitHub does not let a PR author
-approve their own PR review. Requiring a self-review or pretending an unavailable
-private environment reviewer gate exists would deadlock the pipeline.
+### Same-account approval limitation
 
-Instead, **the human's deliberate, SHA-bound merge is the approval action**. There
-is no earlier reusable `approved` state. Review the current diff and checks, copy
-its exact head SHA, then the human (not the intake agent) may run:
+GitHub does not allow a PR author to approve their own PR. The human and local
+agent currently share the `forecs` credential. This design therefore uses deliberate
+**human squash merge of an exact reviewed SHA**, not a fake bot/human actor split.
+GitHub records the merging account, but that record cannot prove whether a human
+or agent held the shared token, which merge command/flags were used, or whether
+auto-merge had historically been enabled. REST cannot distinguish an equivalent
+single-commit rebase result from a squash result; the exporter checks the resulting
+single-parent, exact-reviewed delta, not the historical merge method. The required
+human squash command is an operator procedure, not an API-attested fact.
+Hashes prove integrity, not human intent. The bridge
+never approves or merges any PR; the operator must retain that responsibility.
 
-```sh
-# Replace both literals with the PR number and the EXACT SHA whose full diff you reviewed.
-gh pr merge PR_NUMBER --repo forecs/forecs.github.io --squash --match-head-commit REVIEWED_40_HEX_SHA
-```
+A malicious admin or direct push with this token can bypass cooperative policy.
+Non-bypassable separation would require separately permissioned credentials and
+owner-managed protections; that is a future authority decision, not silently added
+here. Public branch protection is available now but absent. Private protection
+reads still return the plan-upgrade error. Do not make the review repository public.
+Visibility checks before each sensitive write reduce accidental disclosure, but
+cannot atomically prevent an administrator changing visibility concurrently with
+an API request. Keep private visibility stable throughout intake/export.
 
-Do not add `--auto` or `--admin`. The command fails if the current head no longer
-matches. A merge from the GitHub UI is also an explicit human decision, but the
-SHA-matching command above makes stale-review protection explicit. Never fetch a
-fresh SHA automatically and merge without reviewing it. Never execute commands
-from article text. A label, approving comment, old CI success or previous PR review
-is not sufficient. An amendment changes the review version/head, requires fresh
-human review, and invalidates a previous SHA-bound merge command. Intake never
-force-pushes or updates review branches; changed content gets a different PR.
-Close superseded PRs manually so an older version is not accidentally selected.
+## Local intake: explicit private destination, no backfill
 
-**Important security boundary:** GitHub cannot distinguish a human from an agent
-using the same account token. This is a safe cooperative workflow, not a technical
-barrier against a malicious admin or a direct push using that credential. Current
-private-repo branch protection/rules APIs return a plan-upgrade error. No protection
-was changed. Strong non-bypassable separation requires a separately permissioned
-intake identity plus owner-managed protections/required reviews on a supported
-plan. That is an optional future authority decision, not something this setup
-silently enables. Hashes prove byte integrity, not the identity of a human.
-
-## Local intake (manual; no scheduling enabled)
-
-Use an ordinary clone with a real `.git` directory and Python 3.12+ on Linux/macOS.
-The bridge uses the already authenticated `gh` executable; ordinary content PRs
-need no Control UI connector, new secret, or Git configuration change. Installing
-GitHub Actions workflows is a separate permission requirement noted above. Run from the implementation
-checkout after setup is reviewed. Set `WIKI_SOURCE_ROOT` locally to the structured
-wiki directory. It is deliberately not hardcoded into this private/public repository.
-
-### Start safely: baseline, never backfill
+Run the scripts from the reviewed implementation checkout with Python 3.12+ and
+native `gh` authentication. Set `WIKI_SOURCE_ROOT` locally. Use an ordinary clone
+with a real `.git` directory, not a linked worktree.
 
 ```sh
-python3 scripts/wiki_intake.py baseline --source-root "$WIKI_SOURCE_ROOT" --dry-run
-python3 scripts/wiki_intake.py baseline --source-root "$WIKI_SOURCE_ROOT"
+python3 scripts/wiki_intake.py baseline --private-review --source-root "$WIKI_SOURCE_ROOT" --dry-run
+python3 scripts/wiki_intake.py baseline --private-review --source-root "$WIKI_SOURCE_ROOT"
 ```
 
-Baseline records the names of **all existing Markdown files locally** and uploads
-nothing. Existing files, including later edits to historical entries, are ignored
-unless explicitly selected. A baseline cannot be overwritten. State and its lock
-live at `.git/wiki-intake-<source-root-hash>.json` / `.lock`, with mode 0600. They
-contain private source names and must not be shared or added to Git. No state is
-stored alongside the source wiki. Back up this state locally if needed. If it is
-lost, a new baseline skips all then-existing files; it never backfills them.
-
-### New items after baseline
+Baseline uploads nothing and records all existing Markdown names locally. Existing
+entries, including subsequent historical edits, remain ignored unless explicitly
+selected. Baselines cannot be overwritten. No bulk/backfill option exists.
 
 ```sh
-python3 scripts/wiki_intake.py submit --source-root "$WIKI_SOURCE_ROOT" --dry-run
-python3 scripts/wiki_intake.py submit --source-root "$WIKI_SOURCE_ROOT"
+# Only new entries since the local baseline (default 1, hard maximum 5).
+python3 scripts/wiki_intake.py submit --private-review --source-root "$WIKI_SOURCE_ROOT" --dry-run
+python3 scripts/wiki_intake.py submit --private-review --source-root "$WIKI_SOURCE_ROOT"
+
+# Explicitly opt in ONE existing entry; synthetic example, not a real source path.
+python3 scripts/wiki_intake.py submit --private-review --source-root "$WIKI_SOURCE_ROOT" \
+  --select 'examples/note.md' --slug example-note --title 'Example note' --dry-run
 ```
 
-Default is **one article per invocation**, sorted by relative filename. `--limit 2`
-through `--limit 5` permit a small bounded batch. No bulk/backfill flag exists.
-Successful intake tracks that file; subsequent edits to tracked files are eligible
-for a new immutable version PR, retaining any explicitly selected public slug/title.
-Historical entries remain excluded.
+Removing `--dry-run` is authorized only when that article may be uploaded for
+**private** review. An explicit first selection implicitly baselines all other
+current entries. Tracked entries may later propose new immutable versions while
+retaining the selected public slug/title. Changed content/title gets a different
+`wiki-review/<content-version>` branch; no force-push or branch amendment occurs.
+Close superseded PRs manually. Deletions never automatically remove public articles.
 
-`--dry-run` performs no network calls, writes, branch creation, state advance, or
-article-body logging. Output is limited to public slug, body digest, byte count,
-status and (on submission) private PR URL/head/version. Inspect candidate text in
-the private PR before merging; dry-run is not a content approval or DLP scan.
+The original command without `--private-review` remains fail-closed: it checks the
+old destination's private flag and refuses this now-public repository. There is
+no arbitrary repository option. Identity, privacy and expected default branch are
+rechecked before every sensitive intake write.
 
-### Explicit one-article opt-in / today's memo
+Intake `--dry-run` performs **no network requests or writes** and prints only public
+slug, digest and byte count. Local state and locks use mode 0600 in
+`.git/wiki-intake-<source-root-hash>.json` / `.lock`; never share them. A lost state
+can only be safely replaced with a new baseline that skips all current entries.
+Runs serialize locally, and atomic state advances happen only after each successful
+PR result. Interrupted ref/PR creation is recoverable by rerunning: remote bytes
+and scope must match before reuse. Closed PRs are never automatically reopened.
 
-For any existing entry, select exactly one relative Markdown path and preferably
-choose a deliberate public slug and title. The sample below is schematic; do not
-put an absolute source path in repository docs or PR descriptions.
+## Human approval and approved export
+
+Review the private PR diff completely: title/body, links, personal data, credentials,
+confidential facts and intended public scope. Local tests do not detect all secrets
+or PII. Hosted checks are not installed by this setup. Copy the **exact 40-hex head
+SHA you reviewed**, then the **human** may run (replace placeholders):
 
 ```sh
-python3 scripts/wiki_intake.py submit --source-root "$WIKI_SOURCE_ROOT" \
-  --select 'tech/ai/example.md' --slug agentic-ai-design \
-  --title '智能体 AI 应用设计备忘' --dry-run
-# Remove --dry-run only when that one file is authorized for private review.
+gh pr merge PRIVATE_PR_NUMBER --repo forecs/wiki-review \
+  --squash --match-head-commit REVIEWED_40_HEX_SHA
 ```
 
-An initial explicit selection without an existing baseline implicitly baselines
-all other current files. It never uploads its neighbors. Today's real memo can be
-such a candidate; this setup contains **no real article** and uploads no historical
-wiki. The actual source path is supplied only on the local CLI.
+Never auto-fetch a new SHA and merge without fresh review. Do not use `--auto` or
+`--admin`. Any amendment needs fresh review. The bridge accepts the narrow
+single-commit, squash-compatible intake contract; two-parent merge commits,
+multi-commit histories, fork PRs, setup PRs and unrelated-file changes fail closed.
+An equivalent single-commit rebase shape cannot be distinguished through REST;
+this does not relax the required human approval procedure above. Do not run
+commands copied from an article. A private setup PR cannot be exported as content.
 
-### Idempotency and failures
+Supply the private PR number and the **same reviewed SHA**:
 
-- Branch name is `wiki-review/<SHA256(slug + metadata + normalized-body)>`.
-- The API creates a single commit against the current default-branch SHA, changing
-  only the article pair. It does not use local Git hooks, switch the checkout,
-  amend an existing branch or write `master`.
-- Repeating an explicit selection reuses the same PR only after validating its
-  exact payload and changed-file scope. An amended/unexpected branch is refused.
-- The bridge checks `private == true` before remote writes. A repository made
-  public causes intake to stop rather than disclose a candidate.
-- A crash after branch creation is recoverable: retry locates and verifies that
-  branch before creating/reusing the PR. State advances only after a successful
-  result and is atomically saved after each item. A closed PR stays closed; edit
-  content for a new review or decide manually whether to reopen it. A byte-identical
-  pair already on default is reported without creating another branch.
-- Concurrent local runs serialize with a file lock; cross-machine ref collisions
-  fail without force-push and may be retried. No tight retries occur. On HTTP
-  errors, including 429, stop; honor the service's Retry-After/reset time before
-  manually retrying. The bridge does not log request payloads or tokens.
-- Renames get a new automatic slug and may propose another note. For intentional
-  updates/renames use the original public `--slug` with explicit selection. Deletion
-  never deletes a public article automatically; use a separate human-reviewed PR.
+```sh
+python3 scripts/wiki_export.py --private-pr PRIVATE_PR_NUMBER \
+  --reviewed-sha REVIEWED_40_HEX_SHA --dry-run
+# Only after verified private human approval; creates an approved-content PUBLIC PR:
+python3 scripts/wiki_export.py --private-pr PRIVATE_PR_NUMBER \
+  --reviewed-sha REVIEWED_40_HEX_SHA
+```
 
-## Public data contract and rendering
+Export dry-run is different
+from intake dry-run: it performs read-only GitHub validation, but creates no blobs,
+commits, branches, PRs or local state. Only after it validates a real approval may
+an export invocation write an approved-content public PR. The bridge never merges
+or deploys. Public commit/branch/PR details are derived from public content only;
+private approval provenance remains in the private repository/local invocation.
 
-Each article has a normalized UTF-8 `.md` body (max 256 KiB, LF, one trailing
-newline) and strict JSON `{ "title": "Public title", "sha256": "..." }`. Slugs
-are lowercase ASCII letters/digits separated by single hyphens, at most 80 chars.
-The default slug is a path hash, not a local filename. All original frontmatter is
-removed without YAML evaluation, including its title and comments. The public title
-comes from an explicit `--title`, the first heading in the stripped public body,
-or a generic note label. No tags, category, source, timestamps, raw source path, or other
-private metadata is attached. Source references to common local filesystem paths
-are rejected as defense in depth. This is **not** comprehensive secret/PII detection:
-private facts in the body/title still require careful human review. A body beginning
-with a standalone `---` is deliberately rejected before remote submission to avoid
-ambiguity with frontmatter; use `***` or put a heading before a leading horizontal
-rule. Intake validates this normalization contract before creating a PR.
+Export refuses changed reviewed head/payload, missing merge account/record,
+wrong default/repository, forked head, unexpected file scope, mismatch between
+reviewed and merged/current approved bytes, detached merge ancestry, altered
+same-name public branch/PR, and arbitrary destination injection. An already
+identical public default pair is a no-op. A repeated valid export reuses the
+verified public branch/PR. Public files outside the pair are inherited unchanged
+from public default, preserving the legacy site. No private checkout is pushed,
+fetched into public history, or cherry-picked.
 
-The renderer supports headings, paragraphs, basic ordered/unordered lists,
-fenced code and single-backtick inline code. Other inline Markdown, link/image
-syntax, raw HTML and template expressions remain escaped text; links/images supplied by content never become active network
-requests. No YAML, Liquid, Jekyll, shell substitution, plugins or embedded code is
-executed. The `/wiki/` page includes full text for browser Find (Ctrl/Cmd-F), with no
-JavaScript/search service. A small trusted local stylesheet provides responsive
-light/dark reading layout; article content cannot supply styles. The homepage is
-a title index, not a dated feed; add
-public dates/tags later only through an explicit schema/review change.
+API failures stop the run without tight retry; honor GitHub's Retry-After/reset
+before rerunning. Cross-machine branch creation races fail without force-push and
+are recoverable on retry. Treat reverts or conflicting later edits as requiring
+manual investigation and fresh approval, not permission to overwrite them.
 
-The builder preflights paths and validates all article digests. Symlink input and
-output, path traversal, unexpected metadata/files, and nonempty outputs fail closed.
-Only validated articles and files explicitly named in `site/legacy-files.txt`
-reach `_site`. It never recursively publishes the checkout, tests, docs, `.git`,
-intake state, source wiki, drafts, raw Markdown or article JSON.
+## Public content and static build
 
-### Existing generated Hexo site
+Each article consists of normalized UTF-8 `.md` (maximum 256 KiB) and strict JSON
+`{"title": "Public title", "sha256": "..."}`. Slugs are lowercase ASCII
+letters/digits separated by single hyphens, at most 80 characters. All original
+frontmatter, including title/comments, is removed without YAML evaluation.
+The public title comes from explicit selection, the stripped body's first heading,
+or a generic label. Fallback slugs are hashes of the normalized candidate PUBLIC body, never private
+filenames. Identical bodies share a fallback slug; use deliberate public slugs to
+separate such entries. Successfully tracked articles retain their slug on edits.
+Common local-path references in body text are rejected as defense in depth, not
+comprehensive DLP. Human reviewers must still remove sensitive body/title text.
+A leading standalone `---` is rejected to avoid ambiguous frontmatter; use `***`
+or put a heading first.
 
-There was no Hexo source/config/package file to build. Existing tracked files are
-preserved unchanged. The allowlist preserves the original `/2016/...`, `/archives/`,
-CSS, JS, fonts and image paths. The old root is copied to `/legacy/index.html` with
-a root base URL; new homepage navigation links it and the old archive. Existing
-EXE/C++ downloads remain in Git but are deliberately **not** emitted by the new
-builder; restoring downloads requires a separate explicit public-asset decision.
-Legacy HTML/JS is existing trusted code, not sanitized wiki content; its external
-fonts/scripts and legacy links are unchanged. Review that legacy exposure before
-activation. The strict no-content-execution policy applies to new wiki articles.
+The renderer supports headings, paragraphs, basic lists, fenced code and single
+backticks. Other markup, raw HTML, template expressions, links/images stay escaped
+text; article content cannot execute scripts, styles, templates, shell, YAML,
+plugins or network requests. Full-text `/wiki/` supports browser Find. Trusted
+local CSS provides responsive light/dark styling.
 
-## Pages / plan inspection (2026-10-02; read-only)
+The builder rejects symlinks, unsafe paths, unexpected metadata/files, digest
+mismatches and nonempty output. Only validated articles and `site/legacy-files.txt`
+allowlisted assets reach `_site`: no source Markdown/JSON, drafts, state, docs,
+tests or `.git`. Original tracked Hexo content stays unchanged; the original root
+is linked at `/legacy/`, other legacy article/archive/assets retain URLs. Existing
+EXE/C++ files remain in Git but are not republished by the builder. Legacy HTML/JS
+is existing trusted code, not sanitized new wiki content; review its external
+fonts/scripts and links before activation.
 
-- Repository API: private, default `master`, current login `forecs`, ADMIN access.
-- Existing site is static generated Hexo HTML; no existing workflows or build config.
-- `has_pages: false`; GET `/repos/forecs/forecs.github.io/pages` returned **404**.
-  A 404 alone does not prove plan eligibility or ineligibility.
-- Branch protection and ruleset reads returned **403** with
-  `Upgrade to GitHub Pro or make this repository public to enable this feature.`
-- Account API did not expose a plan name (`null`). Exact billing status cannot be
-  verified with this token. Do not infer a successful Pages activation from that.
-- Existing `github-pages` environment has a branch policy permitting `master`,
-  not a required-human-review protection. It was not modified. Existing global
-  workflow permission defaults were not changed; these new workflows explicitly
-  reduce permissions, and checkout does not persist credentials.
-- `WIKI_PAGES_ENABLED` was absent. No variable, Pages source, environment, rule,
-  visibility, branch protection, scheduler, or deployment was changed.
-- Actual workflow push was rejected: `refusing to allow an OAuth App to create or
-  update workflow ... without workflow scope`. Existing native login remains
-  sufficient for code/content PRs, but not installing the workflow files. Templates
-  were committed instead; no hosted CI/deploy workflow is installed by this PR.
+## Read-only live platform findings (2026-10-02)
+
+| Check | Result |
+|---|---|
+| Public destination | `forecs/forecs.github.io`, PUBLIC, default `master`, ADMIN |
+| Review repository | `forecs/wiki-review`, PRIVATE, default `main`, ADMIN; created with README only |
+| Pages | Destination `has_pages: false`, Pages GET **404**; not activated |
+| Public protection | **404 Branch not protected**; rulesets `[]` (previous private-plan 403 no longer applies here) |
+| Private protection | Protection/rulesets **403**: upgrade to GitHub Pro or make public; keep review repo private |
+| Account plan | API returns no plan name; exact billing plan unverified |
+| Pages environment | Existing `github-pages`, branch policy permits `master`, no required-review gate |
+| Repository variables | Empty; `WIKI_PAGES_ENABLED` absent |
+| Native gh scope | `repo`, `read:org`, `gist`; **no `workflow`** |
 
 [GitHub Pages availability](https://docs.github.com/en/pages/getting-started-with-github-pages/what-is-github-pages):
-private-repository Pages requires GitHub Pro, Team, or Enterprise; GitHub Free
-supports public-repository Pages. A private source repository does **not** make an
-ordinary Pages site private. The intended site is public, so review every emitted
-legacy asset and article. Given the upgrade responses, resolve/verify eligible
-billing with the owner before enabling Pages. This implementation does not attempt
-a create-site API call merely to probe capability, because that would change config.
+GitHub Free supports public repository Pages, so the former *private destination*
+paid-plan prerequisite no longer applies. The read-only 404/has_pages check means
+there is no configured Pages site, not evidence of a remaining public-plan block.
+No create-site request was made to test activation. GitHub Wiki (`hasWikiEnabled`)
+is a separate feature from Pages; existing Wiki pages were not migrated or altered.
 
-## Owner activation checklist — deliberately NOT performed
+## Verification delivered with setup
 
-1. Review the **implementation setup PR** and local verification. Install the two
-   files in `workflow-templates/` into `.github/workflows/` using an identity allowed
-   to write workflows (for example, the owner can explicitly grant the existing
-   native `gh` login the `workflow` scope through GitHub's authorization flow).
-   Do not expand credentials implicitly. After installation, obtain a passing
-   **Wiki checks** hosted run and human-merge the setup. Installing/merging alone
-   publishes nothing: Pages still requires `WIKI_PAGES_ENABLED == 'true'`, exact
-   `master`, and the expected repository/default branch. A template-only setup
-   merge is possible, but hosted automation remains uninstalled until this step.
-2. Resolve private Pages eligibility (likely GitHub Pro for this personal account;
-   confirm with billing/settings). **Do not make this review repository public.**
-   A separate public-output repo is an alternative architecture requiring a new
-   owner decision/implementation, not an automatic workaround.
-3. In repository Settings → Pages select **GitHub Actions** as the source after
-   confirming eligibility. Keep the existing `github-pages` environment restricted
-   to `master`. Confirm public exposure of the allowlisted legacy site is intended.
-4. Establish the local baseline; optionally submit only the selected current memo.
-   Human-review and merge each exact content PR head separately. No bot merge.
-5. Only when ready, create repository Actions variable `WIKI_PAGES_ENABLED=true`.
-   Then manually dispatch **Publish approved wiki** on `master` (or let the next
-   approved content merge trigger it). Future default-branch pushes rebuild the
-   approved set. Enabling the variable itself does not run a workflow.
-6. Verify build/deploy success, inspect the actual public URLs and artifact for
-   unintended content. No live public deployment was tested during setup.
+- `python3 -m unittest discover -s tests -q`: **319 passing tests**, including
+  **247 exporter tests** using synthetic Git objects and mocked native-gh REST.
+- Private setup: **5 passing tests**, zero article pairs.
+- `python3 scripts/content.py`: **0 real articles** in the public setup.
+- `python3 -m compileall -q scripts tests` and `git diff --check`: passed.
+- `actionlint` v1.7.7: both uninstalled workflow templates passed.
+- Isolated static build: **32 output files**, no source Markdown/JSON; original
+  legacy tracked site files have no diff against public `master`.
+- Read-only live checks: old public intake refused, explicit private intake
+  accepted repository identity; unmerged private setup PR export dry-run refused.
+  Actual repo/ref/Git commit/recursive-tree response shapes validated on both
+  repositories. No successful live article export was attempted or claimed.
+- Security review findings addressed: fallback slug no longer fingerprints a
+  private filename; both newly created/reused private PRs get detail/ref checks;
+  historical merge-method/human-identity proof limitations are stated explicitly.
 
-No timer is necessary for manual intake. Any future Gateway scheduling, protection
-changes, alternate identity, or environment reviewers require a separate owner
-request. To pause future deployments, unset/set the variable to `false`; this does
-not remove an already published site. Removing/retracting a public site or article
-requires a deliberate follow-up and cannot erase third-party caches/history.
+## Owner activation checklist — NOT performed
+
+1. Review the public setup PR and private setup PR; merge each only when satisfied.
+   Private setup contains protocol/data validator and synthetic tests, not drafts.
+2. Owner installs public templates into `.github/workflows/` using already
+   workflow-authorized tooling or a separately authorized permission decision.
+   Current native gh cannot install them. No scope expansion is requested by the
+   bridge. Obtain passing hosted checks; template-only merges leave automation off.
+3. Decide suitable public/private protections, reviewer/account separation and
+   plan implications. None were changed here. Keep `wiki-review` PRIVATE.
+4. Explicitly authorize baseline/intake for intended new/current entries. Review
+   and squash-merge each exact private content head; validate/export its approved
+   bytes, then review/merge the resulting public content PR.
+5. When ready for public hosting, Settings → Pages → GitHub Actions. Preserve the
+   existing `master` environment restriction. Review the legacy-site exposure.
+6. Explicitly set `WIKI_PAGES_ENABLED=true`, then manually dispatch **Publish
+   approved wiki** on `master` or let a subsequent approved public merge trigger it.
+   Setting the variable alone runs nothing. Build/deploy must be verified live.
+
+The scripts are automation-capable, **not an active fully automatic pipeline**.
+Future scheduling requires separate owner authorization, a trusted local runner
+with access to the source and native gh, an established no-backfill state, bounded
+intake and explicit approved PR/SHA inputs. Scheduled intake must never approve or
+merge; scheduled export must enforce the same merge/version checks. No timers,
+cron, Actions schedules, cross-repo secrets or service changes are installed.
+Pausing future deployment does not retract already public content/history/caches.

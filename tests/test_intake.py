@@ -30,7 +30,7 @@ class FakeGitHubAPI:
         if data is not None:
             self.writes.append(path)
         if path == "":
-            return {"private": self.private, "default_branch": "master"}
+            return {"private": self.private, "default_branch": "master", "full_name": intake.REPO, "fork": False}
         if path == "git/ref/heads/master":
             return {"object": {"sha": "base"}}
         if path.startswith("git/ref/heads/wiki-review/"):
@@ -55,8 +55,14 @@ class FakeGitHubAPI:
             return {"files": self.diff if self.diff is not None else [{"filename": f, "status": "added"} for f in self.files]}
         if path.startswith("pulls?"):
             return self.prs
+        if path == "pulls/1":
+            return self.prs[0]
         if path == "pulls":
-            self.prs = [{"html_url": "https://github.com/forecs/forecs.github.io/pull/1", "state": "open", "head": {"sha": "head"}}]
+            self.prs = [{"number": 1, "html_url": "https://github.com/forecs/forecs.github.io/pull/1", "state": "open",
+                         "head": {"sha": "head", "ref": data["head"], "repo": {"full_name": intake.REPO, "fork": False, "private": True}},
+                         "base": {"ref": data["base"], "repo": {"full_name": intake.REPO, "fork": False, "private": True}}}]
+            return self.prs[0]
+        if path == "pulls/1":
             return self.prs[0]
         raise AssertionError(f"unexpected fake API path {path}")
 
@@ -215,6 +221,14 @@ class BridgeTests(unittest.TestCase):
         with self.assertRaises(ValueError):
             self.execute(self.args(select="../outside.md"))
 
+    def test_fallback_slug_has_no_private_filename_fingerprint(self):
+        state = {"baseline": [], "tracked": {}}
+        a = intake.candidates({"secret-name.md": b"# Public\n"}, state)[0]
+        b = intake.candidates({"different-name.md": b"# Public\n"}, state)[0]
+        self.assertEqual(a["slug"], b["slug"])
+        self.assertEqual(a["slug"], "note-" + content.digest(a["body"])[:24])
+        self.assertNotEqual(a["slug"], "note-" + content.digest(b"secret-name.md")[:24])
+
     def test_bounded_batch(self):
         files = {f"{n}.md": b"x\n" for n in range(10)}
         state = {"baseline": [], "tracked": {}}
@@ -235,10 +249,75 @@ class GitHubTests(unittest.TestCase):
             intake.GitHub(self.api)
         self.assertEqual(self.api.writes, [])
 
+    def test_private_visibility_rechecked_before_each_write(self):
+        gh = intake.GitHub(self.api)
+        gh.submit(self.item)
+        self.api.private = False
+        writes = len(self.api.writes)
+        for path in ("git/trees", "git/commits", "git/refs", "pulls"):
+            with self.assertRaises(ValueError):
+                gh.post(path, {})
+        self.assertEqual(len(self.api.writes), writes)
+
+    def test_destination_injection_and_wrong_identity_refused(self):
+        with self.assertRaises(ValueError):
+            intake.GitHub(self.api, repo="attacker/public")
+        for override in ({"full_name": "attacker/public"}, {"fork": True}, {"default_branch": "other"}):
+            def wrong(endpoint, data=None, missing=False):
+                result = self.api(endpoint, data, missing)
+                return {**result, **override} if endpoint == f"repos/{intake.REPO}" else result
+            with self.assertRaises(ValueError):
+                intake.GitHub(wrong)
+
+    def test_explicit_private_review_destination(self):
+        calls = []
+        def private_api(endpoint, data=None, missing=False):
+            calls.append(endpoint)
+            mapped = endpoint.replace(intake.REVIEW_REPO, intake.REPO).replace("heads/main", "heads/master").replace("base=main", "base=master")
+            result = self.api(mapped, data, missing)
+            if endpoint == f"repos/{intake.REVIEW_REPO}":
+                return {**result, "full_name": intake.REVIEW_REPO, "default_branch": "main"}
+            if isinstance(result, dict) and "head" in result and "base" in result:
+                result["head"]["repo"]["full_name"] = intake.REVIEW_REPO
+                result["base"]["repo"]["full_name"] = intake.REVIEW_REPO
+            if isinstance(result, dict) and "head" in result:
+                result = json.loads(json.dumps(result).replace(intake.REPO, intake.REVIEW_REPO))
+                result["base"]["ref"] = "main"
+            return result
+        self.assertEqual(intake.GitHub(private_api, repo=intake.REVIEW_REPO).submit(self.item)["status"], "open")
+        self.assertTrue(all(call.startswith(f"repos/{intake.REVIEW_REPO}") for call in calls))
+
     def test_amended_branch_refused(self):
         gh = intake.GitHub(self.api)
         gh.submit(self.item)
         self.api.files["publish_articles/test.md"] = b"amended\n"
+        with self.assertRaises(ValueError):
+            gh.submit(self.item)
+
+    def test_new_pr_head_race_refused_without_state_advance(self):
+        real = self.api
+        def raced(endpoint, data=None, missing=False):
+            result = real(endpoint, data, missing)
+            if endpoint.endswith("/pulls/1"):
+                result["head"]["sha"] = "amended"
+            return result
+        with self.assertRaises(ValueError):
+            intake.GitHub(raced).submit(self.item)
+
+    def test_final_private_ref_race_refused(self):
+        real = self.api
+        def raced(endpoint, data=None, missing=False):
+            result = real(endpoint, data, missing)
+            if endpoint.endswith("/pulls/1"):
+                real.ref = {"object": {"sha": "amended"}}
+            return result
+        with self.assertRaises(ValueError):
+            intake.GitHub(raced).submit(self.item)
+
+    def test_fork_pr_reuse_refused(self):
+        gh = intake.GitHub(self.api)
+        gh.submit(self.item)
+        self.api.prs[0]["head"]["repo"]["fork"] = True
         with self.assertRaises(ValueError):
             gh.submit(self.item)
 

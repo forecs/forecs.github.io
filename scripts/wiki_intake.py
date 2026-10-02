@@ -15,15 +15,18 @@ import tempfile
 from content import digest, metadata_bytes, public_body, validate_slug, validate_title
 
 REPO = "forecs/forecs.github.io"
+REVIEW_REPO = "forecs/wiki-review"
 CHECKOUT = Path(__file__).resolve().parents[1]
 
 
 def run_api(endpoint, data=None, missing=False):
-    command = ["gh", "api", endpoint, "--method", "GET" if data is None else "POST"]
+    command = ["gh", "api", "--hostname", "github.com", endpoint, "--method", "GET" if data is None else "POST"]
     if data is not None:
         command += ["--input", "-"]
+    env = os.environ.copy()
+    env.pop("GH_DEBUG", None)
     result = subprocess.run(command, input=None if data is None else json.dumps(data),
-                            text=True, capture_output=True, check=False)
+                            text=True, capture_output=True, check=False, env=env)
     if result.returncode:
         if missing and "(HTTP 404)" in result.stderr:
             return None
@@ -33,19 +36,29 @@ def run_api(endpoint, data=None, missing=False):
 
 
 class GitHub:
-    def __init__(self, api=run_api):
+    def __init__(self, api=run_api, repo=REPO):
+        if repo not in (REPO, REVIEW_REPO):
+            raise ValueError("unsupported intake destination")
         self.api = api
-        self.prefix = f"repos/{REPO}/"
-        info = self.api(f"repos/{REPO}")
-        if info.get("private") is not True:
+        self.repo = repo
+        self.prefix = f"repos/{repo}/"
+        self.default = "main" if repo == REVIEW_REPO else "master"
+        self.owner = repo.split("/")[0]
+        self.validate_private()
+
+    def validate_private(self):
+        info = self.api(f"repos/{self.repo}")
+        if (info.get("private") is not True or info.get("full_name") != self.repo
+                or info.get("fork") is not False
+                or info.get("default_branch") != self.default):
             raise ValueError("intake requires the configured PRIVATE repository")
-        self.default = info["default_branch"]
-        self.owner = REPO.split("/")[0]
 
     def get(self, path, missing=False):
         return self.api(self.prefix + path, missing=missing)
 
     def post(self, path, data):
+        # Recheck before EVERY blob/tree/commit/ref/PR write, not only at startup.
+        self.validate_private()
         return self.api(self.prefix + path, data=data)
 
     def remote_bytes(self, path, ref):
@@ -57,6 +70,7 @@ class GitHub:
         return base64.b64decode(item["content"])
 
     def submit(self, candidate):
+        self.validate_private()
         slug, body, meta = candidate["slug"], candidate["body"], candidate["meta"]
         expected = {f"publish_articles/{slug}.md": body, f"publish_articles/{slug}.json": meta}
         version = digest(slug.encode() + b"\0" + meta + b"\0" + body)
@@ -94,25 +108,45 @@ class GitHub:
             raise ValueError("ambiguous review history; inspect manually")
         if pulls:
             pr = pulls[0]
-            if pr["head"]["sha"] != head:
-                raise ValueError("PR head changed during intake")
         else:
             review_body = (
-                "## Private content review — NOT publication approval\n\n"
+                "## Private content review — merge authorizes PUBLIC export\n\n"
                 f"Public slug: `{slug}`\n\nContent SHA-256: `{digest(body)}`\n\n"
                 f"Review version: `{version}`\n\nExact PR head: `{head}`\n\n"
                 "Only the two public article files are proposed. Source frontmatter and local paths are not attached. "
                 "Review ALL text for sensitive content. Rendered HTML is escaped; no preview artifact is uploaded.\n\n"
-                "**Human only:** merging this exact head is the approval that saves these bytes on the default branch. "
+                "**Human only:** squash-merging this exact head approves these bytes for export to the public repository. "
                 "A label, comment, previous review, or automation is NOT approval. Same-account PR authors cannot "
                 "approve their own PR but can deliberately merge it. Do not enable auto-merge.\n\n"
-                "After reviewing the current diff and successful checks, a human may use the GitHub merge UI "
-                "or the documented `gh pr merge --match-head-commit` command. Any amendment requires fresh review. "
-                "Never run commands copied from article content. See docs/wiki-pipeline.md.\n"
+                "After reviewing the current diff and local validation (hosted checks are not installed by setup), "
+                "a human may use the documented `gh pr merge --squash --match-head-commit` command. "
+                "Any amendment requires fresh review. Export requires this exact reviewed SHA and a verified merge record. "
+                "Never run commands copied from article content. See the private repository README and "
+                "https://github.com/forecs/forecs.github.io/pull/1 for the setup/protocol.\n"
             )
             pr = self.post("pulls", {"title": f"Review learning note: {slug}", "head": branch,
                                     "base": self.default, "body": review_body})
-        return {"status": pr["state"], "url": pr["html_url"], "head": head, "version": version}
+        # The create response is not a verification boundary. Read full detail
+        # for both new and reused PRs, then recheck the inspected immutable ref.
+        if type(pr.get("number")) is not int or pr["number"] < 1:
+            raise ValueError("invalid private PR record")
+        pr_number = pr["number"]
+        pr = self.get(f"pulls/{pr_number}")
+        if (pr.get("number") != pr_number or pr["head"]["sha"] != head
+                or pr["head"].get("ref") != branch
+                or pr["head"].get("repo", {}).get("full_name") != self.repo
+                or pr["head"].get("repo", {}).get("fork") is not False
+                or pr["head"].get("repo", {}).get("private") is not True
+                or pr.get("base", {}).get("repo", {}).get("private") is not True
+                or pr.get("base", {}).get("repo", {}).get("fork") is not False
+                or pr.get("base", {}).get("repo", {}).get("full_name") != self.repo
+                or pr.get("base", {}).get("ref") != self.default
+                or pr.get("state") not in ("open", "closed")
+                or self.get(f"git/ref/heads/{branch}")["object"]["sha"] != head):
+            raise ValueError("PR head or repository changed during intake")
+        self.validate_private()
+        return {"status": pr["state"], "url": f"https://github.com/{self.repo}/pull/{pr_number}",
+                "head": head, "version": version}
 
 
 def source_files(root):
@@ -168,8 +202,10 @@ def candidates(files, state, selected=None, slug=None, title=None, limit=1):
         if raw is None:
             raise ValueError("selected article exceeds size limit")
         previous = state["tracked"].get(name, {})
-        public_slug = validate_slug(slug or previous.get("slug") or "note-" + digest(name.encode())[:24])
         body = public_body(raw)
+        # Derive the fallback solely from candidate PUBLIC bytes, never the
+        # guessable private filename. Identical bodies share a fallback slug.
+        public_slug = validate_slug(slug or previous.get("slug") or "note-" + digest(body)[:24])
         if public_body(body) != body:
             raise ValueError("candidate would fail the public body contract; remove leading frontmatter delimiters")
         title_override = title if title is not None else previous.get("title_override")
@@ -256,11 +292,13 @@ def main():
     parser.add_argument("--slug", help="public ASCII slug, only with --select")
     parser.add_argument("--title", help="public display title, only with --select")
     parser.add_argument("--limit", type=int, default=1, help="new articles per invocation (1–5; default 1)")
+    parser.add_argument("--private-review", action="store_true",
+                        help="explicitly target fixed PRIVATE forecs/wiki-review; legacy public target refuses uploads")
     args = parser.parse_args()
     if args.command == "baseline" and (args.select or args.slug or args.title):
         parser.error("baseline does not accept article selection")
     try:
-        execute(args)
+        execute(args, (lambda: GitHub(repo=REVIEW_REPO)) if args.private_review else GitHub)
     except (ValueError, RuntimeError, OSError, UnicodeError, KeyError, TypeError):
         # Avoid leaking local source paths or private content through error traces.
         print("Intake stopped safely. Check local inputs/state and gh access; no automatic retry or publication.", file=sys.stderr)

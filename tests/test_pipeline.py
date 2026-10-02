@@ -15,7 +15,7 @@ REPO = Path(__file__).resolve().parents[1]
 
 
 class PipelineTests(unittest.TestCase):
-    def test_candidate_is_private_until_exact_pair_is_human_merged(self):
+    def test_candidate_stays_private_until_approved_export_and_public_merge(self):
         with tempfile.TemporaryDirectory() as temp:
             root = Path(temp)
             private_branch, default = root / "private-branch", root / "default"
@@ -33,7 +33,8 @@ class PipelineTests(unittest.TestCase):
             before = b"".join(p.read_bytes() for p in (root / "before").rglob("*") if p.is_file())
             self.assertNotIn(b"NEW_NOTE_SENTINEL", before)
             self.assertEqual(validate_articles(default / "publish_articles"), [])
-            # Simulate ONLY a human merging the exact reviewed pair (no network).
+            # Simulate approved pair export plus a separate public human merge.
+            # The mock API export suite tests the actual private merge/export gate.
             for name in ("public-note.md", "public-note.json"):
                 (default / "publish_articles" / name).write_bytes((proposed / name).read_bytes())
             build(default, root / "after")
