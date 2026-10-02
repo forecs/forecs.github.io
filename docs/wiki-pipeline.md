@@ -7,14 +7,19 @@ The owner made `forecs/forecs.github.io` **public** and explicitly selected a
 created **private**, initialized with only a README, and given a reviewable setup
 PR: [private setup #1](https://github.com/forecs/wiki-review/pull/1).
 Public implementation: [public setup #1](https://github.com/forecs/forecs.github.io/pull/1).
-Setup PRs are not content approvals and have not been merged. No real local
-wiki entries or historical drafts were uploaded to either repository.
+Both setup PRs merged on 2026-10-02. Public default `master` is
+`0ebadbb6fb913208f82b2ad6f77981a046ffe143`; verification uses that merged tree,
+not the former PR branch. Setup PRs are not content approvals. Both merged
+defaults contain zero article pairs. Verification uploads no real local wiki
+entries or historical drafts.
 
 The existing native `gh` login is sufficient for repository creation, private
 intake and approved export. It lacks `workflow` scope: the previous active-workflow
-push was rejected. Public workflows remain **uninstalled templates**. No new
-workflow push, alternate API installation, new secret, cross-repo Actions token,
-Control UI connector, scope expansion, scheduler, or Pages activation was attempted.
+push was rejected. The new public workflows remain **uninstalled templates**.
+Verification performs no workflow installation, new secret, cross-repo Actions
+token, connector, scope expansion, scheduler or Pages configuration change.
+However, read-only checks now show a separately active **legacy root-branch Pages
+deployment**, detailed below; template absence does not mean all automation is off.
 
 ## Trust boundaries
 
@@ -38,6 +43,9 @@ Control UI connector, scope expansion, scheduler, or Pages activation was attemp
 5. **Public integration/deployment:** a human separately reviews and merges the
    public content PR. An owner-installed, separately enabled Pages workflow can
    then build only public default-branch content into an isolated artifact.
+   These safeguards apply to that workflow only. The currently configured legacy
+   `master`-root publisher bypasses this builder and its opt-in. The owner must
+   separately migrate the Pages source before relying on artifact isolation.
 
 **The public PR itself discloses the article immediately.** Private merge approval
 must authorize that disclosure, not merely saving a private draft. Public PR merge
@@ -197,23 +205,86 @@ fonts/scripts and links before activation.
 | Check | Result |
 |---|---|
 | Public destination | `forecs/forecs.github.io`, PUBLIC, default `master`, ADMIN |
-| Review repository | `forecs/wiki-review`, PRIVATE, default `main`, ADMIN; created with README only |
-| Pages | Destination `has_pages: false`, Pages GET **404**; not activated |
+| Review repository | `forecs/wiki-review`, PRIVATE, default `main`; setup merged; zero article pairs; no workflows/runs/Pages |
+| Pages | `has_pages: true`; status `built`; `build_type: legacy`; source `master`, path `/`; HTTPS enforced |
 | Public protection | **404 Branch not protected**; rulesets `[]` (previous private-plan 403 no longer applies here) |
 | Private protection | Protection/rulesets **403**: upgrade to GitHub Pro or make public; keep review repo private |
 | Account plan | API returns no plan name; exact billing plan unverified |
 | Pages environment | Existing `github-pages`, branch policy permits `master`, no required-review gate |
-| Repository variables | Empty; `WIKI_PAGES_ENABLED` absent |
+| Repository opt-in | `WIKI_PAGES_ENABLED` absent (GET 404); this does not disable legacy Pages |
+| Hosted workflow | Only GitHub's dynamic `pages-build-deployment`; both custom templates remain uninstalled |
+| Hosted tests | No `Wiki checks` run; the successful Jekyll build is not evidence that Python tests ran |
 | Native gh scope | `repo`, `read:org`, `gist`; **no `workflow`** |
 
 [GitHub Pages availability](https://docs.github.com/en/pages/getting-started-with-github-pages/what-is-github-pages):
 GitHub Free supports public repository Pages, so the former *private destination*
-paid-plan prerequisite no longer applies. The read-only 404/has_pages check means
-there is no configured Pages site, not evidence of a remaining public-plan block.
-No create-site request was made to test activation. GitHub Wiki (`hasWikiEnabled`)
-is a separate feature from Pages; existing Wiki pages were not migrated or altered.
+paid-plan prerequisite no longer applies. Earlier pre-merge findings of
+`has_pages: false` / Pages 404 are superseded by the live findings above.
+No create-site request or configuration change was made during verification.
+GitHub Wiki is a separate feature from Pages; a Wiki feature flag does not
+establish a Pages deployment, and no Wiki content was migrated.
 
-## Verification delivered with setup
+### Actual hosted deployment versus intended artifact
+
+[Run 36961685309](https://github.com/forecs/forecs.github.io/actions/runs/36961685309)
+succeeded for merged public commit `0ebadbb6fb913208f82b2ad6f77981a046ffe143`.
+Its jobs are Jekyll build, build-status reporting and deploy, **not** the new
+Python tests or isolated builder. The downloaded `github-pages` artifact contains
+49 regular files, including scripts, tests, template YAML, docs, and historical
+EXE/C++ files that the new builder excludes. Those are already-public repository
+files; this finding does not establish any transfer of private data or history.
+
+HTTP checks: [homepage](https://forecs.github.io/) **200** (old Hexo page),
+[`/wiki/`](https://forecs.github.io/wiki/) **404**, `/legacy/` **404**, and
+[`/scripts/wiki_export.py`](https://forecs.github.io/scripts/wiki_export.py) **200**.
+In contrast, a fresh isolated build of the exact merged code produces **32 files**,
+with no Markdown/JSON, scripts/tests, EXE/C++ or template files. Copied legacy
+assets match the allowlist byte-for-byte. That local artifact is **not deployed**.
+
+**Do not treat `WIKI_PAGES_ENABLED` as a repository-wide publishing kill switch.**
+It gates only `wiki-pages.yml` once installed, not the current legacy publisher.
+Moving Settings → Pages → Source to GitHub Actions is a separate owner decision.
+Until then, `master` changes can trigger root publishing without our builder.
+Disabling future runs does not retract already published files or caches.
+
+### Post-merge verification and follow-up fixes
+
+The original merged public tree passes **319 tests** (40 builder, 247 exporter,
+30 intake, 2 pipeline); the private tree passes **5**. Both content validators
+report zero articles. Compile checks and diff checks pass. Twelve additional
+local synthetic probes exercise intake → simulated exact-head approval → export
+→ simulated public merge → build, native CLI dry-runs with mocked `gh`, negative
+approval/visibility cases, and reproduce two contract defects described below.
+These probes make no live article writes or approvals.
+
+Both uninstalled templates pass **actionlint v1.7.7**. Their four direct action
+SHAs resolve to real upstream commits and the commented major tags at verification
+time. Their PR permissions, explicit Pages opt-in/default-branch guards, exact
+event-SHA checkout, isolated upload and `github-pages` deployment environment were
+reviewed. Upstream `upload-pages-artifact` itself calls `upload-artifact@v4`:
+direct pins are verified, but this is not a fully immutable transitive action graph.
+No hosted execution of these templates has occurred.
+
+The follow-up review change fixes two reproduced defects, without weakening the
+human approval boundary:
+
+- PR history lookup previously filtered by the expected base, hiding retargeted
+  PRs and allowing a duplicate PR on retry. Intake/export now discover history
+  across bases and reject altered/ambiguous history; intake also refuses to
+  recreate a missing branch with existing PR history.
+- Both validators previously accepted duplicate JSON keys that export rejects.
+  They now reject duplicate title/digest keys, including escaped spellings.
+
+The follow-up public suite passes **330 tests**; the matching private validator
+follow-up passes **8**. This is fix-branch evidence, not a claim that fixes have
+already reached either default branch. Human review/merge remains required.
+
+Read-only native API checks validate both repository identities, exact default
+refs, commit/recursive-tree contracts and zero article pairs. Export dry-run
+correctly rejects the now-merged private setup PR as non-article approval.
+No successful real-content intake/export is claimed.
+
+## Verification delivered with setup (historical pre-merge baseline)
 
 - `python3 -m unittest discover -s tests -q`: **319 passing tests**, including
   **247 exporter tests** using synthetic Git objects and mocked native-gh REST.
@@ -231,26 +302,36 @@ is a separate feature from Pages; existing Wiki pages were not migrated or alter
   private filename; both newly created/reused private PRs get detail/ref checks;
   historical merge-method/human-identity proof limitations are stated explicitly.
 
-## Owner activation checklist — NOT performed
+## Owner migration and activation checklist
 
-1. Review the public setup PR and private setup PR; merge each only when satisfied.
+1. **Completed by owner:** both setup PRs merged. This is not article approval.
    Private setup contains protocol/data validator and synthetic tests, not drafts.
+   Review the subsequent validation/idempotence fixes separately before intake.
 2. Owner installs public templates into `.github/workflows/` using already
    workflow-authorized tooling or a separately authorized permission decision.
    Current native gh cannot install them. No scope expansion is requested by the
-   bridge. Obtain passing hosted checks; template-only merges leave automation off.
+   bridge. Install `workflow-templates/wiki-checks.yml` as
+   `.github/workflows/wiki-checks.yml` and `workflow-templates/wiki-pages.yml` as
+   `.github/workflows/wiki-pages.yml` through a separately reviewed change.
+   Obtain a passing **Wiki checks** run on `master`; template-only merges do not
+   activate these checks. Legacy Pages remains a separate active path.
 3. Decide suitable public/private protections, reviewer/account separation and
    plan implications. None were changed here. Keep `wiki-review` PRIVATE.
 4. Explicitly authorize baseline/intake for intended new/current entries. Review
    and squash-merge each exact private content head; validate/export its approved
    bytes, then review/merge the resulting public content PR.
-5. When ready for public hosting, Settings → Pages → GitHub Actions. Preserve the
-   existing `master` environment restriction. Review the legacy-site exposure.
+5. Before relying on the new publication boundary, owner explicitly migrates
+   [Settings → Pages](https://github.com/forecs/forecs.github.io/settings/pages)
+   from **Deploy from a branch (`master` / root)** to **GitHub Actions**. This is
+   migration of an existing live site, not first-time activation. Preserve the
+   `github-pages` environment `master` restriction and review the legacy assets.
+   Requesting verification alone does not authorize this settings change.
 6. Explicitly set `WIKI_PAGES_ENABLED=true`, then manually dispatch **Publish
    approved wiki** on `master` or let a subsequent approved public merge trigger it.
    Setting the variable alone runs nothing. Build/deploy must be verified live.
 
-The scripts are automation-capable, **not an active fully automatic pipeline**.
+The scripts are automation-capable, **not an active fully automatic wiki pipeline**.
+The currently active legacy Pages automation is not that pipeline.
 Future scheduling requires separate owner authorization, a trusted local runner
 with access to the source and native gh, an established no-backfill state, bounded
 intake and explicit approved PR/SHA inputs. Scheduled intake must never approve or
