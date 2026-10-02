@@ -1,109 +1,145 @@
-# VitePress verification evidence — 2026-10-02
+# Modern-only VitePress verification — 2026-10-02
 
-## Base and scope
+This replaces the earlier legacy-preserving verification. The owner's explicit
+new decision is **delete all historical site files and publish only modern
+VitePress through GitHub Actions Pages**. No URL-compatibility acceptance gate
+remains. This document records local evidence, not a hosted deployment claim.
 
-- Managed Git worktree on new branch `openclaw/vitepress-blog-modernization`.
-- Base: public `origin/master` at `8b9d85c82f47146a27668a3536a118dfc4a2fc47`.
-- No private content, approval, export, merge, workflow installation or Pages
-  setting change performed. `publish_articles` still contains zero articles.
-- Existing content validator, intake/export scripts, Python-only builder, legacy
-  manifest and historical files have **no diff** against the base.
+## Scope and deletion evidence
 
-## Executed checks
+- Existing worktree/branch: `openclaw/vitepress-blog-modernization`, PR #3.
+- Follow-up starts at `bd533601b96d1997110a376cb59feb632addba16`; original migration
+  base remains `8b9d85c82f47146a27668a3536a118dfc4a2fc47`.
+- **34 historical files deleted** from the current tree: 29 generated Hexo web
+  files/assets plus three EXE binaries and two C++ sources. The exact inventory
+  is [`legacy-deleted-files.txt`](legacy-deleted-files.txt), enforced by tests.
+- Also removed: `site/legacy-files.txt`,
+  `tests/fixtures/legacy-source-sha256.json`, `tests/test_legacy_snapshot.py`,
+  `site/frontend/archive/index.md`, and
+  `site/frontend/.vitepress/theme/components/ArchiveIndex.vue`.
+- The two `workflow-templates/wiki-{checks,pages}.yml` paths are replaced by actual
+  `.github/workflows/wiki-{checks,pages}.yml` files, not retained as templates.
+  There are **41 removed old paths** when viewing the follow-up with rename
+  detection disabled (34 historical + 5 obsolete support + 2 relocated workflows).
+- `/legacy/`, `/archive/`, `/archives/`, old dated articles/assets and download
+  compatibility links are absent. The root homepage is modern, not a relocated
+  historical page. No Python fallback publisher remains; `build_site.py` only
+  supplies shared validation, safe filesystem operations and inert rendering.
+- Public validator and intake/export behavior are preserved. Exporter changes
+  only its documentation wording; exact-SHA private approval and separate public
+  review/merge remain mandatory. No article intake/export/approval occurred;
+  production has **zero approved article pairs**.
+- Deletion is not a Git history rewrite, cache purge or retraction of prior public
+  copies. No PR merge or repository Pages setting change was performed.
 
-Local runtime: Linux ARM64, Python **3.12.3**, Node **24.21.0**, npm **11.19.0**.
-Workflow templates select Node **22** LTS; hosted execution is not claimed.
+## Executed local checks
+
+Runtime: Linux ARM64, Python **3.12.3**, Node **24.21.0**, npm **11.19.0**.
+Installed workflows select Node **22** LTS; no hosted-runtime result is implied.
 
 | Check | Result |
 |---|---|
-| Clean `npm ci` with committed lockfile | Pass; exact stable VitePress 1.6.4 |
-| `python3 -m unittest discover -s tests -v` | **364 tests passed**, including all original 330 |
-| `python3 scripts/content.py` | **0 article(s)** validated |
-| `npm test` | **364 Python tests + 8 real Chromium tests passed**, none skipped |
-| `npm run build` | Pass; **62 allowlisted final files** |
-| Repeat production build | Pass; previous output byte-verified before replacement |
-| Python-only fallback build | Pass; remains usable without VitePress |
+| `npm ci` with committed lockfile | Pass; 128 packages installed, exact VitePress 1.6.4 and Playwright 1.63.0 |
+| `python3 -B -m unittest discover -s tests -v` | **348 passed** |
+| `python3 -B scripts/content.py` | **0 articles validated** |
+| `npm test` | **348 Python + 9 Chromium tests passed**, none skipped |
+| `npm run build` | Pass; **30 allowlisted files** |
+| Repeat `npm run build` | Pass; previous output byte-verified before replacement |
+| `python3 -B scripts/audit_site.py --output _site` | Pass; exact inventory, digests, modern routes and SSR links |
+| Per-file SHA-256 snapshot check | **30/30 passed** |
+| Production legacy/source/private-marker scan | Pass |
 | `python3 -m compileall -q scripts tests` | Pass |
-| `actionlint` 1.7.7, both workflow templates | Pass |
-| `git diff --check` | Pass |
-| Historical Git files versus base | **34/34 byte-identical** (29 web files + 5 downloads) |
-| Non-root historical files in final artifact | **28/28 byte-identical**, original paths |
-| Final artifact inventory and every SHA-256 versus external build receipt | Exact match |
+| actionlint **1.7.7**, actual `.github/workflows/*.yml` | Pass |
+| Five direct GitHub Actions commit pins | All resolved through upstream GitHub commit API |
+| `git diff --check` and staged diff check | Pass |
 
-### Browser verification (synthetic fixtures only)
+Test counts differ from the superseded 364-test suite because obsolete historical
+preservation/Python publisher tests were retired and replaced with modern helper,
+artifact audit, deletion and route-rejection tests. Intake/export contract tests
+remain. Local logs are in the ignored `_build-temp-verification/` directory; they
+are not uploaded into the Pages artifact.
 
-The committed `tests/modern-browser.test.mjs` builds an empty fixture and a fixture
-with two synthetic approved notes in an isolated temporary tree. It never adds
-fixtures to the real public article directory. Real Chromium verifies:
+## Browser evidence — synthetic fixtures only
 
-1. SSR title/article output renders malicious script, Vue interpolation, include,
-   image and iframe payloads as inert text; no article code executes.
-2. VitePress local search finds **body-only English and Chinese** text, handles
-   no-results state, and navigates to the correct article without title injection.
-3. Wiki sidebar and client-side full-text filtering work with escaped titles.
+Real Chromium builds an empty fixture and two synthetic approved notes, then
+verifies:
+
+1. Hostile HTML, Vue expressions, include syntax and titles remain inert text.
+2. Actual VitePress local search finds English and Chinese body-only queries,
+   handles no results, and navigates without executing hostile titles.
+3. Wiki sidebar and body filtering escape public data.
 4. Dark mode toggles and persists across navigation.
-5. Home, wiki, article and archive have no horizontal overflow at **390×844**;
-   mobile navigation opens.
-6. Modern archive links the pinned GitHub downloads; excluded original downloads
-   are absent, while historical articles and legacy home return successfully.
-7. Empty fixture has an honest empty state; no approval/checkout files leak.
-8. Modern tested pages emit **zero browser JS errors and zero third-party requests**.
-   This does not apply to unsanitized historical pages and their old dependencies.
+5. Home, wiki and article have no horizontal overflow at **390×844**; mobile
+   navigation works.
+6. Every removed historical file URL except the intentionally replaced root
+   `index.html` returns **404** on the isolated static fixture. `/archive/`,
+   `/archives/` and `/legacy/` also return 404. Modern navigation has no old routes,
+   revision-pinned downloads or historical-preservation claims.
+7. Frontend data contracts reject obsolete legacy/download fields and extra
+   private metadata.
+8. Empty production-shaped fixture is honestly empty with no source/approval
+   files or historical content in its receipt.
+9. Tested modern pages emit **zero browser errors and zero third-party requests**.
 
-Production (zero-note) screenshots were also captured and visually inspected for
-home, wiki, archive, desktop light/dark mode, and mobile home. The rendered design
-uses a restrained green palette, readable bilingual text, responsive cards and
-navigation; screenshots are local verification artifacts, not Pages inputs.
+The browser fixture server binds only `127.0.0.1` and serves generated output.
+No Vite/esbuild development server or checkout-root server is exposed.
 
-## Artifact inspection
+## Artifact inventory
 
-The canonical per-file checksum inventory is committed at
-[`vitepress-artifact-sha256.txt`](vitepress-artifact-sha256.txt). Its SHA-256 is:
+Canonical checksum file: [`vitepress-artifact-sha256.txt`](vitepress-artifact-sha256.txt).
+Its SHA-256 is:
 
 ```
-51a60fe7cdde279c69622da24f35fa8373d75691fbb5e3e3d2ba124eb079e1ad
+ba16b7207589c8a006db2cce312e9137e71bd46034e096047a106395542813ea
 ```
 
-Inventory: **28 exact historical copies + 1 relocated historical home + 32
-VitePress files + `.nojekyll` = 62**. The 32 VitePress files comprise three main
-pages, 404, `hashmap.json`, `vp-icons.css`, and 26 emitted runtime/font/style files.
-`hashmap.json` is VitePress's public route/chunk map—not approval metadata.
+**30 files total:**
 
-Inspection found no `.exe`, `.cpp`, `.py`, raw `.md`, `.vue`, source maps,
-workflow YAML, approval JSON, checkout scripts/tests/docs, node_modules, Git data
-or private source directories. Text scans found no checkout absolute path,
-temporary build path, private sentinel, staged JSON filename or approval SHA field.
-Article bodies may appear in public runtime/search chunks by design; only already
-validated public article content is supplied.
+- **3 HTML:** `index.html`, `wiki/index.html`, `404.html`.
+- **9 generated JavaScript** runtime/page/search chunks.
+- **2 CSS** files.
+- **14 bundled WOFF2** font files.
+- **1 JSON:** VitePress's public `hashmap.json` route/chunk map, not approval data.
+- **1 empty `.nojekyll`** marker.
 
-The three added historical snapshot tests lock the 34 original input checksums
-and exact legacy web manifest. New modern-builder regressions cover stale content,
-changed digests, hostile content, symlinks/FIFOs, unexpected assets/routes,
-nonempty or unowned output, orphan receipts and output-path protection.
+No legacy HTML/assets, EXE, C++, Python, raw Markdown/Vue, source maps, tests,
+workflow YAML, docs, package files, approval JSON, source directory, Git data,
+private metadata or source/build paths occur in this artifact. Runtime chunks
+are generated modern frontend code, not checkout scripts. The adjacent build
+receipt is deliberately outside `_site` and is not an upload input.
 
-An independent read-only code/artifact review found no additional blocking defect
-under the documented trusted/quiescent-checkout and trusted-toolchain assumption.
-The output receipt is integrity evidence, not a signature or protection against a
-malicious maintainer modifying build code and its receipt generator together.
+Python staging admits only explicitly enumerated trusted frontend files plus
+validated public data. Finalization verifies Rollup's exact file/digest receipt,
+closed output path policy and the approved-content digest. The independent
+post-build audit checks the final receipt, routes and real SSR `href/src`
+attributes; escaped article examples are not treated as active links. Browser
+checks additionally exercise runtime navigation. Neither receipts nor these
+checks defend against a malicious maintainer changing the trusted code/toolchain.
 
-## Explicit limitations and owner gates
+A read-only independent review found no current publication/privacy blocker under
+the trusted, quiescent-checkout assumption. Its stale-evidence finding is resolved
+by this replacement report; its link-audit concern led to HTML-aware checks and
+regressions for historical download URLs and harmless escaped examples.
 
-- **Not every prior Pages URL is preserved.** Five historical `.exe`/`.cpp`
-  download URLs are excluded to meet the no-binaries/source artifact rule;
-  unchanged Git files and revision-pinned GitHub links retain access to content.
-  Owner must accept the exception or arrange a separately managed redirect host.
-  Old root-page fragments now refer to the modern root; historical fragments are
-  available under `/legacy/index.html#…`.
-- Read-only Pages API still reported **legacy / master / root**. The active root
-  publisher bypasses this builder; template-only changes do not secure it.
-- Workflows remain **uninstalled** because the native credential lacks `workflow`
-  scope. Local results are not hosted CI/deployment evidence.
-- `npm audit`: **3 affected packages (1 high, 2 moderate)** in the stable build-tool
-  chain; no fix reported within that selection. The documented advisory review
-  requires avoiding Vite/esbuild dev servers and serving only the audited static
-  output. No clean audit claim is made.
+## Remaining remote gates and bounded risks
 
-See [migration, deployment and rollback instructions](vitepress-migration.md).
-Review/merge, URL-exception acceptance, workflow installation, source transition,
-opt-in and hosted verification are separate owner actions. No live deployment is
-claimed.
+- **Workflow-capable push:** native gh exposes `repo`, `read:org`, `gist`, not
+  `workflow`. Workflow changes may be rejected on push; local inclusion cannot be
+  represented as remote installation. The PR handoff records the exact attempted
+  push result and commit. No credential/scope change or bypass is performed.
+- **Pages source:** fresh read-only API inspection still reports `legacy`, source
+  `master` `/`, status `built`. Owner must separately migrate to **GitHub Actions**;
+  the custom opt-in does not disable root Jekyll publishing. Do not merge and
+  assume this settings transition occurred.
+- **Deployment gates:** repository `forecs/forecs.github.io`, default `master`,
+  event ref `refs/heads/master`, and `WIKI_PAGES_ENABLED=true` are required for
+  build/deploy. Exact event SHA is checked out, only audited `_site` is uploaded,
+  and only deploy receives Pages/OIDC writes. PR checks publish nothing.
+- **Dependency audit:** fresh `npm audit` reports **3 affected build-tool packages
+  (1 high, 2 moderate)**: Vite, esbuild and the dependent VitePress entry; npm
+  reports no available fix in this stable selection. This is not a clean audit.
+  Stable direct pins/lockfile remain; no incompatible overrides or prerelease
+  upgrades are hidden. Only one-shot builds and loopback static preview are
+  supported. See [the advisory review](vitepress-migration.md#dependency-advisory-review-2026-10-02).
+- No hosted CI success, Pages deployment, settings activation, public article
+  publication or PR merge is claimed by this local report.

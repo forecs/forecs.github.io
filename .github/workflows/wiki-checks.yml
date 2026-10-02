@@ -3,7 +3,7 @@ on:
   pull_request:
     branches: [master]
   push:
-    branches: [master, 'feat/**']
+    branches: [master, 'openclaw/vitepress-blog-modernization']
 permissions:
   contents: read
 jobs:
@@ -20,6 +20,8 @@ jobs:
       - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4
         with:
           node-version: '22'
+      - name: Lint installed workflows (pinned actionlint)
+        run: go run github.com/rhysd/actionlint/cmd/actionlint@v1.7.7 .github/workflows/*.yml
       - run: npm ci
       - run: npx playwright install --with-deps chromium
       - name: Test with synthetic fixtures only
@@ -28,5 +30,9 @@ jobs:
         run: npm test
       - name: Validate data contract (no preview or article logs)
         run: python3 scripts/content.py
+      - name: Compile Python and check whitespace
+        run: |
+          python3 -m compileall -q scripts tests
+          git diff --check
       # Synthetic local builds only: no Pages artifact, upload, deployment,
       # privileged events, private sources or secrets on PRs.

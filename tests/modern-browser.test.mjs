@@ -3,6 +3,7 @@
 import { test, before, after } from 'node:test'
 import assert from 'node:assert/strict'
 import { chromium } from '@playwright/test'
+import { validatePublicData } from '../site/frontend/.vitepress/shared.mjs'
 import { mkdtemp, cp, mkdir, readFile, writeFile, rm, stat } from 'node:fs/promises'
 import { createHash } from 'node:crypto'
 import { execFileSync } from 'node:child_process'
@@ -31,13 +32,7 @@ function build(repo, output) {
 before(async () => {
   fixture = await mkdtemp(path.join(root, '_build-temp-browser-'))
   await cp(path.join(root, 'scripts'), path.join(fixture, 'scripts'), { recursive: true })
-  await cp(path.join(root, 'site'), path.join(fixture, 'site'), { recursive: true })
-  const manifest = (await readFile(path.join(root, 'site/legacy-files.txt'), 'utf8'))
-    .split('\n').filter(x => x && !x.startsWith('#'))
-  for (const name of manifest) {
-    await mkdir(path.dirname(path.join(fixture, name)), { recursive: true })
-    await cp(path.join(root, name), path.join(fixture, name))
-  }
+  await cp(path.join(root, 'site/frontend'), path.join(fixture, 'site/frontend'), { recursive: true })
   await mkdir(path.join(fixture, 'publish_articles'))
   build(fixture, 'empty-site')
   for (const [slug, title, body] of [
@@ -147,7 +142,7 @@ test('dark mode toggles and persists after navigation', async () => {
 
 test('mobile home and wiki have no horizontal overflow and usable navigation', async () => {
   const page = await pageAt('/', { width: 390, height: 844 })
-  for (const route of ['/', '/wiki/', '/wiki/synthetic-security/', '/archive/']) {
+  for (const route of ['/', '/wiki/', '/wiki/synthetic-security/']) {
     await page.goto(origin + route, { waitUntil: 'networkidle' })
     assert.ok(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth + 1), route)
   }
@@ -156,26 +151,40 @@ test('mobile home and wiki have no horizontal overflow and usable navigation', a
   await page.close()
 })
 
-test('modern archive pins excluded downloads and preserves historical page paths', async () => {
-  const page = await pageAt('/archive/')
-  const links = await page.locator('main a').evaluateAll(nodes => nodes.map(node => node.getAttribute('href')))
-  for (const name of ['Demo-Enable-SoftAP-WinRT.exe', 'Demo-IOCP-WinRT.exe', 'Demo-QOSAddSocketToFlow.cpp', 'Demo-QOSAddSocketToFlow.exe', 'main.cpp']) {
-    assert.ok(links.includes(`https://github.com/forecs/forecs.github.io/blob/8b9d85c82f47146a27668a3536a118dfc4a2fc47/${name}`))
-    assert.equal((await fetch(origin + '/' + name)).status, 404)
+test('only modern routes are published and navigation has no historical claims', async () => {
+  const deleted = (await readFile(path.join(root, 'docs/legacy-deleted-files.txt'), 'utf8')).trim().split('\n')
+  // The old root index is intentionally replaced by the modern homepage.
+  const retired = deleted.filter(name => name !== 'index.html').map(name => '/' + name)
+  for (const route of ['/archive/', '/archives/', '/legacy/', '/2016/post/', '/downloads/tool.exe', ...retired]) {
+    assert.equal((await fetch(origin + route)).status, 404, route)
   }
-  assert.ok(links.includes('/2016/08/02/hello-world/index.html'))
-  assert.equal((await fetch(origin + '/2016/08/02/hello-world/')).status, 200)
-  assert.equal((await fetch(origin + '/legacy/')).status, 200)
-  await page.close()
+  for (const route of ['/', '/wiki/', '/wiki/synthetic-security/']) {
+    const page = await pageAt(route)
+    const links = await page.locator('a').evaluateAll(nodes => nodes.map(node => node.getAttribute('href')))
+    assert.ok(links.every(href => !/^(?:\/(?:archive|legacy|2016|downloads)(?:\/|$))|\/blob\//.test(href)), route)
+    assert.doesNotMatch(await page.locator('body').innerText(), /archive|legacy|download|历史归档|旧站/i)
+    await page.close()
+  }
+})
+
+test('frontend data contract rejects legacy and download pollution', () => {
+  assert.deepEqual(validatePublicData({ articles: [] }), { articles: [] })
+  for (const extra of [{ legacy: [] }, { downloads: [] }, { legacy: [], downloads: [] }]) {
+    assert.throws(() => validatePublicData({ articles: [], ...extra }), /Expected only staged public articles/)
+  }
+  assert.throws(() => validatePublicData({ articles: [{ slug: 'note', title: 'Note', body: '', html: '', private: 'secret' }] }), /Invalid staged public article/)
 })
 
 test('empty fixture artifact has honest empty state and no approval/checkout files', async () => {
   const empty = await readFile(path.join(fixture, 'empty-site/wiki/index.html'), 'utf8')
   assert.match(empty, /No public wiki notes yet/)
-  assert.doesNotMatch(empty, /SyntheticNeedle784/)
+  assert.doesNotMatch(empty, /SyntheticNeedle784|archive|legacy|downloads|历史归档|旧站/i)
+  const home = await readFile(path.join(fixture, 'empty-site/index.html'), 'utf8')
+  assert.match(home, /No wiki notes have been published yet/)
+  assert.doesNotMatch(home, /archive|legacy|downloads|历史归档|旧站/i)
   const receipt = JSON.parse(await readFile(path.join(fixture, 'empty-site.build-receipt.json'), 'utf8'))
   for (const name of Object.keys(receipt)) {
-    assert.ok(!/(?:^|\/)(?:scripts|tests|publish_articles|site|node_modules|\.git)\//.test(name), name)
+    assert.ok(!/(?:^|\/)(?:scripts|tests|publish_articles|site|node_modules|\.git|archive|legacy|2016|downloads)\//.test(name), name)
     assert.ok(!/\.(?:exe|cpp|md|py|vue|map)$/.test(name), name)
     assert.ok(!name.endsWith('.json') || name === 'hashmap.json', name)
   }

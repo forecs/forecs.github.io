@@ -1,12 +1,9 @@
-# Explicit historical public files; paths are relative to the checkout root.
-# No globs, directories, traversal, executables, C++ sources, drafts or metadata.
-# All non-root files retain their original URL and exact bytes.
-# index.html alone moves to legacy/index.html; the builder adds <base href="/">
-# to preserve root-relative resolution; same-document anchors stay on legacy home.
-# Deploy this site at the origin root.
-# Historical HTML/JS is trusted legacy content and is NOT sanitized by the builder.
 2016/08/02/hello-world/index.html
 2016/08/02/rabbitmq-troubleshooting/index.html
+Demo-Enable-SoftAP-WinRT.exe
+Demo-IOCP-WinRT.exe
+Demo-QOSAddSocketToFlow.cpp
+Demo-QOSAddSocketToFlow.exe
 archives/2016/08/index.html
 archives/2016/index.html
 archives/index.html
@@ -34,3 +31,4 @@ fancybox/jquery.fancybox.js
 fancybox/jquery.fancybox.pack.js
 index.html
 js/script.js
+main.cpp

@@ -10,9 +10,6 @@ hero:
     - theme: brand
       text: 探索知识库 · Explore wiki
       link: /wiki/
-    - theme: alt
-      text: 历史归档 · Archive
-      link: /archive/
 ---
 
 <HomeOverview />

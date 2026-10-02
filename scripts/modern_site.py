@@ -1,8 +1,7 @@
 #!/usr/bin/env python3
 """Isolated standard-library validation/staging and exact-allowlist finalization.
 
-The original build_site.build(repo, output) remains the script-free compatibility
-builder. This pipeline never sends article Markdown to VitePress: trusted Vue
+This pipeline never sends article Markdown to VitePress: trusted Vue
 receives only public data and Python-rendered inert HTML. Review/export and the
 shared validator remain mandatory. Run against a quiescent trusted checkout;
 this is not a sandbox against concurrent hostile filesystem or toolchain edits.
@@ -25,23 +24,20 @@ import sys
 import tempfile
 
 try:
-    from . import build_site as old
+    from . import build_site as core
 except ImportError:
-    import build_site as old
+    import build_site as core
 
-BuildError = old.BuildError
-BASE_COMMIT = '8b9d85c82f47146a27668a3536a118dfc4a2fc47'
-DOWNLOADS = ('Demo-Enable-SoftAP-WinRT.exe', 'Demo-IOCP-WinRT.exe',
-             'Demo-QOSAddSocketToFlow.cpp', 'Demo-QOSAddSocketToFlow.exe', 'main.cpp')
+BuildError = core.BuildError
 # Reviewed trusted frontend inputs, not a glob over site/ or the checkout.
 FRONTEND = (
-    'index.md', 'wiki/index.md', 'archive/index.md',
+    'index.md', 'wiki/index.md',
     '.vitepress/config.mjs', '.vitepress/theme/index.js',
     '.vitepress/theme/style.css', '.vitepress/shared.mjs', '.vitepress/theme/data.js',
     '.vitepress/theme/components/HomeOverview.vue', '.vitepress/theme/components/ArticleIndex.vue',
-    '.vitepress/theme/components/ArchiveIndex.vue', '.vitepress/theme/components/ApprovedArticle.vue',
+    '.vitepress/theme/components/ApprovedArticle.vue',
 )
-FIXED_OUTPUT = {'index.html', 'wiki/index.html', 'archive/index.html',
+FIXED_OUTPUT = {'index.html', 'wiki/index.html',
                 '404.html', 'hashmap.json', 'vp-icons.css'}
 ASSET = re.compile(r'assets/(?:chunks/)?[A-Za-z0-9_@.-]+\.(?:js|css|woff2?|ttf|otf|png|svg|webp|jpg)\Z')
 
@@ -62,12 +58,12 @@ def read_json(path):
                 raise BuildError('Duplicate receipt key')
             result[key] = value
         return result
-    return json.loads(old._read_bytes(path), object_pairs_hook=unique)
+    return json.loads(core._read_bytes(path), object_pairs_hook=unique)
 
 
 def target_path(repo, output):
     output = Path(output)
-    return old._checked_path(output if output.is_absolute() else repo / output)
+    return core._checked_path(output if output.is_absolute() else repo / output)
 
 
 def write_files(output, files):
@@ -77,55 +73,48 @@ def write_files(output, files):
             raise BuildError('Output file/directory collision')
     output.mkdir(parents=True, exist_ok=True)
     for name, data in sorted(files.items()):
-        target = old._checked_path(output / name)
+        target = core._checked_path(output / name)
         target.parent.mkdir(parents=True, exist_ok=True)
         with target.open('xb') as stream:
             stream.write(data)
 
 
-def public_data(articles, legacy):
+def public_data(articles):
     """Canonical public projection; also binds finalization to the approved version."""
     return {
         'articles': [{
             'slug': a['slug'], 'title': a['title'], 'body': a['body'],
-            'html': old.render_markdown(a['body']),
+            'html': core.render_markdown(a['body']),
         } for a in articles],
-        'legacy': [{'path': '/' + name, 'title': {
-            '2016/08/02/hello-world/index.html': 'Hello World',
-            '2016/08/02/rabbitmq-troubleshooting/index.html': 'RabbitMQ troubleshooting',
-        }.get(name, name)} for name in legacy if name.startswith('2016/') and name.endswith('.html')],
-        'downloads': [{'name': name, 'url': f'https://github.com/forecs/forecs.github.io/blob/{BASE_COMMIT}/{name}'}
-                      for name in DOWNLOADS],
     }
 
 
 def stage(repo: Path, output: Path) -> None:
     """Validate approved pairs and write ONLY trusted templates + inert public data."""
-    repo = old._checked_path(repo)
+    repo = core._checked_path(repo)
     output = target_path(repo, output)
-    old._check_output(repo, output)
-    articles = old._approved(repo)
-    legacy = old._legacy(repo, output)
-    files = {name: old._read_bytes(repo / 'site/frontend' / name) for name in FRONTEND}
-    files['.vitepress/public-data.json'] = json_bytes(public_data(articles, legacy))
+    core._check_output(repo, output)
+    articles = core._approved(repo)
+    files = {name: core._read_bytes(repo / 'site/frontend' / name) for name in FRONTEND}
+    files['.vitepress/public-data.json'] = json_bytes(public_data(articles))
     for a in articles:
         files[f"wiki/{a['slug']}/index.md"] = (
             '<!-- Trusted generated wrapper: article text is data, never Vue source. -->\n'
             f'<ApprovedArticle slug="{a["slug"]}" />\n'
         ).encode()
-    old._check_output(repo, output)
+    core._check_output(repo, output)
     write_files(output, files)
 
 
 def tree(root):
     """Read all files without following symlinks; reject special/hidden entries."""
-    root = old._checked_path(root)
+    root = core._checked_path(root)
     if not root.is_dir():
         raise BuildError('Expected build directory')
     files = {}
     def visit(directory):
         for item in directory.iterdir():
-            old._checked_path(item)
+            core._checked_path(item)
             if item.name.startswith('.'):
                 raise BuildError('Hidden artifact entry')
             if item.is_dir():
@@ -134,7 +123,7 @@ def tree(root):
                     raise BuildError('Empty artifact directory')
                 visit(item)
             else:
-                files[item.relative_to(root).as_posix()] = old._read_bytes(item)
+                files[item.relative_to(root).as_posix()] = core._read_bytes(item)
     visit(root)
     return files
 
@@ -149,14 +138,13 @@ def check_receipt(files, receipt):
             raise BuildError(f'Artifact digest mismatch: {name}')
 
 
-def finalized_files(repo, dist, receipt, output):
-    articles = old._approved(repo)
+def finalized_files(repo, dist, receipt):
+    articles = core._approved(repo)
     expected = FIXED_OUTPUT | {f"wiki/{a['slug']}/index.html" for a in articles}
     record = read_json(receipt)
     if not isinstance(record, dict) or set(record) != {'files', 'publicDataSha256'}:
         raise BuildError('Expected content-bound Rollup output inventory')
-    legacy = old._legacy(repo, output)
-    if record['publicDataSha256'] != digest(json_bytes(public_data(articles, legacy))):
+    if record['publicDataSha256'] != digest(json_bytes(public_data(articles))):
         raise BuildError('Staged public content no longer matches the approved version')
     inventory = record['files']
     if not isinstance(inventory, dict):
@@ -166,57 +154,53 @@ def finalized_files(repo, dist, receipt, output):
         raise BuildError('Unexpected generated route or non-asset output')
     files = tree(dist)
     check_receipt(files, inventory)
-    if set(files) & set(legacy):
-        raise BuildError('Generated route collides with historical URL')
-    files.update(legacy)
     files['.nojekyll'] = b''
     return files
 
 
 def finalize(repo, dist, receipt, output):
-    repo = old._checked_path(repo)
+    repo = core._checked_path(repo)
     output = target_path(repo, output)
-    old._check_output(repo, output)
-    files = finalized_files(repo, dist, receipt, output)
-    old._check_output(repo, output)
+    core._check_output(repo, output)
+    files = finalized_files(repo, dist, receipt)
+    core._check_output(repo, output)
     write_files(output, files)
 
 
 def published_tree(root):
     # .nojekyll is the sole explicitly permitted hidden output.
-    marker = old._read_bytes(root / '.nojekyll')
+    marker = core._read_bytes(root / '.nojekyll')
     if marker:
         raise BuildError('Invalid .nojekyll marker')
     def visit(directory):
         result = {}
         for item in directory.iterdir():
-            old._checked_path(item)
+            core._checked_path(item)
             if item.is_dir():
                 if not any(item.iterdir()):
                     raise BuildError('Empty artifact directory')
                 result.update(visit(item))
             else:
-                result[item.relative_to(root).as_posix()] = old._read_bytes(item)
+                result[item.relative_to(root).as_posix()] = core._read_bytes(item)
         return result
     return visit(root)
 
 
 def build(repo, output):
-    repo = old._checked_path(repo)
+    repo = core._checked_path(repo)
     output = target_path(repo, output)
-    receipt = old._checked_path(output.with_name(output.name + '.build-receipt.json'))
+    receipt = core._checked_path(output.with_name(output.name + '.build-receipt.json'))
     # Check protected paths even when replacing an existing output.
-    if old._inside(repo, output) or (old._inside(output, repo) and
-            (output.relative_to(repo).parts[0].lower() in old.RESERVED or
+    if core._inside(repo, output) or (core._inside(output, repo) and
+            (output.relative_to(repo).parts[0].lower() in core.RESERVED or
              output.relative_to(repo).parts[0].startswith('.'))):
         raise BuildError('Unsafe output location')
-    old._legacy(repo, output)  # Also reject output nested inside a historical source directory.
     previous = None
     if output.exists() and (not output.is_dir() or any(output.iterdir())):
         previous = read_json(receipt)
         check_receipt(published_tree(output), previous)
     else:
-        old._check_output(repo, output)
+        core._check_output(repo, output)
         if receipt.exists():
             raise BuildError('Receipt exists without a verified prior artifact; move it aside explicitly')
     # Under repo only for npm module resolution; sources remain a closed allowlist.
@@ -224,13 +208,13 @@ def build(repo, output):
         scratch = Path(temporary)
         source, dist, result = scratch / 'src', scratch / 'dist', scratch / 'final'
         rollup_receipt = scratch / 'rollup-output.json'
-        before = old._approved(repo)
+        before = core._approved(repo)
         stage(repo, source)
-        if before != old._approved(repo):
+        if before != core._approved(repo):
             raise BuildError('Articles changed during staging')
         subprocess.run(['node', str(repo / 'scripts/vitepress_build.mjs'),
                         str(source), str(dist), str(rollup_receipt)], check=True, cwd=repo)
-        if before != old._approved(repo):
+        if before != core._approved(repo):
             raise BuildError('Articles changed during build; obtain fresh review')
         finalize(repo, dist, rollup_receipt, result)
         final_receipt = json_bytes({name: digest(data) for name, data in published_tree(result).items()})
@@ -241,7 +225,7 @@ def build(repo, output):
             check_receipt(published_tree(output), previous)
         elif output.exists() and any(output.iterdir()):
             raise BuildError('Output changed during build')
-        old._checked_path(receipt)
+        core._checked_path(receipt)
         backup = scratch / 'previous'
         existed = output.exists()
         if existed:

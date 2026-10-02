@@ -24,7 +24,7 @@ const excerpt = (body) => {
     <h2 id="empty-wiki-title">留白，是下一篇笔记的位置。</h2>
     <p>目前还没有已发布的知识库文章。这里仅展示已审核并公开发布的内容。</p>
     <p lang="en">No public wiki notes yet. Only reviewed, published notes appear here.</p>
-    <a class="text-link" :href="withBase('/archive/')">先看看历史归档 <span lang="en">/ Explore the archive →</span></a>
+    <a class="text-link" :href="withBase('/')">返回首页 <span lang="en">/ Back to home →</span></a>
   </section>
   <section v-else aria-label="公开笔记列表 · Public note list">
     <div class="wiki-filter">

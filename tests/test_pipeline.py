@@ -7,7 +7,8 @@ import tempfile
 import unittest
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "scripts"))
-from build_site import build
+from modern_site import stage as build
+import shutil
 from content import metadata_bytes, validate_articles
 from wiki_intake import candidates
 
@@ -21,8 +22,7 @@ class PipelineTests(unittest.TestCase):
             private_branch, default = root / "private-branch", root / "default"
             for repo in (private_branch, default):
                 (repo / "publish_articles").mkdir(parents=True)
-                (repo / "site").mkdir()
-                (repo / "site/legacy-files.txt").write_text("")
+                shutil.copytree(REPO / "site/frontend", repo / "site/frontend")
             raw = b'---\ntitle: Public\nsource: /home/private/wiki\nsecret: PRIVATE_META_SENTINEL\n---\n# NEW_NOTE_SENTINEL\n<script>alert(1)</script>\n'
             [item] = candidates({"private/note.md": raw}, {"baseline": [], "tracked": {}}, selected="private/note.md", slug="public-note")
             proposed = private_branch / "publish_articles"
@@ -30,7 +30,7 @@ class PipelineTests(unittest.TestCase):
             (proposed / "public-note.json").write_bytes(item["meta"])
             # The public builder sees default, never a private review branch.
             build(default, root / "before")
-            before = b"".join(p.read_bytes() for p in (root / "before").rglob("*") if p.is_file())
+            before = (root / "before/.vitepress/public-data.json").read_bytes()
             self.assertNotIn(b"NEW_NOTE_SENTINEL", before)
             self.assertEqual(validate_articles(default / "publish_articles"), [])
             # Simulate approved pair export plus a separate public human merge.
@@ -38,13 +38,14 @@ class PipelineTests(unittest.TestCase):
             for name in ("public-note.md", "public-note.json"):
                 (default / "publish_articles" / name).write_bytes((proposed / name).read_bytes())
             build(default, root / "after")
-            after = b"".join(p.read_bytes() for p in (root / "after").rglob("*") if p.is_file())
+            data = json.loads((root / "after/.vitepress/public-data.json").read_text())
+            after = data["articles"][0]["html"].encode()
             self.assertIn(b"NEW_NOTE_SENTINEL", after)
             self.assertIn(b"&lt;script&gt;", after)
             for secret in (b"PRIVATE_META_SENTINEL", b"/home/private", b"private/note.md", b"<script>"):
                 self.assertNotIn(secret, after)
-            self.assertFalse(list((root / "after").rglob("*.md")))
-            self.assertFalse(list((root / "after").rglob("*.json")))
+            self.assertEqual(set(data), {"articles"})
+            self.assertEqual(set(data["articles"][0]), {"slug", "title", "body", "html"})
             # Amending only a body cannot silently retain the old integrity proof.
             (default / "publish_articles/public-note.md").write_text("Amended\n")
             with self.assertRaises(ValueError):
@@ -52,8 +53,7 @@ class PipelineTests(unittest.TestCase):
             self.assertFalse((root / "amended").exists())
 
     def test_workflows_do_not_publish_prs_or_enable_implicitly(self):
-        active = REPO / ".github/workflows"
-        workflows = active if (active / "wiki-checks.yml").exists() else REPO / "workflow-templates"
+        workflows = REPO / ".github/workflows"
         checks = (workflows / "wiki-checks.yml").read_text()
         pages = (workflows / "wiki-pages.yml").read_text()
         self.assertIn("pull_request:", checks)

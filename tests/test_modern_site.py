@@ -1,4 +1,4 @@
-"""Security/compatibility tests for the isolated VitePress boundary (no npm needed)."""
+"""Security tests for the isolated VitePress boundary (no npm needed)."""
 import hashlib
 import importlib
 import json
@@ -7,14 +7,39 @@ from pathlib import Path
 import shutil
 import tempfile
 import unittest
-from unittest import mock
-from urllib.parse import urljoin
+from html.parser import HTMLParser
+import sys
 
-from test_build_site import Document, tree_snapshot
+ROOT = Path(__file__).resolve().parents[1]
+if str(ROOT) not in sys.path:
+    sys.path.insert(0, str(ROOT))
 
 modern = importlib.import_module('scripts.modern_site')
-old = importlib.import_module('scripts.build_site')
-ROOT = Path(__file__).resolve().parents[1]
+core = importlib.import_module('scripts.build_site')
+
+
+class Document(HTMLParser):
+    def __init__(self, source):
+        super().__init__(convert_charrefs=True)
+        self.elements = []
+        self.text = ''
+        self.feed(source)
+        self.close()
+
+    def handle_starttag(self, tag, attrs):
+        self.elements.append((tag, dict(attrs)))
+
+    def handle_data(self, data):
+        self.text += data
+
+
+def tree_snapshot(root):
+    entries = {}
+    for item in root.rglob('*'):
+        name = item.relative_to(root).as_posix()
+        entries[name] = ('symlink', os.readlink(item)) if item.is_symlink() else (
+            ('directory',) if item.is_dir() else ('file', item.read_bytes()))
+    return entries
 
 
 class ModernSiteTests(unittest.TestCase):
@@ -26,9 +51,6 @@ class ModernSiteTests(unittest.TestCase):
         self.repo.mkdir()
         (self.repo / 'publish_articles').mkdir()
         (self.repo / 'site').mkdir()
-        self.put('site/legacy-files.txt', 'index.html\ncss/style.css\n')
-        self.put('index.html', '<html><head><title>Old</title></head><body><a href="#anchor">jump</a><a href="2016/post/">post</a><a href="/">Home</a></body></html>')
-        self.put('css/style.css', 'body { color: blue }')
         shutil.copytree(ROOT / 'site/frontend', self.repo / 'site/frontend')
         self.output = self.base / 'output'
 
@@ -49,7 +71,8 @@ class ModernSiteTests(unittest.TestCase):
     def fake_dist(self):
         dist = self.base / 'dist'
         dist.mkdir()
-        names = modern.FIXED_OUTPUT | {'assets/app.abcdef.js', 'assets/chunks/search.123.js'}
+        names = (modern.FIXED_OUTPUT | {'assets/app.abcdef.js', 'assets/chunks/search.123.js'} |
+                 {f"wiki/{a['slug']}/index.html" for a in core._approved(self.repo)})
         for name in names:
             p = dist / name
             p.parent.mkdir(parents=True, exist_ok=True)
@@ -58,14 +81,15 @@ class ModernSiteTests(unittest.TestCase):
         receipt.write_bytes(modern.json_bytes({
             'files': {name: modern.digest((dist / name).read_bytes()) for name in names},
             'publicDataSha256': modern.digest(modern.json_bytes(modern.public_data(
-                old._approved(self.repo), old._legacy(self.repo, self.output)))),
+                core._approved(self.repo)))),
         }))
         return dist, receipt
 
     def test_empty_approved_state_is_real_empty(self):
         data = self.staged()
         self.assertEqual(data['articles'], [])
-        self.assertEqual(len(data['downloads']), 5)
+        self.assertEqual(set(data), {'articles'})
+        self.assertFalse((self.output / 'archive').exists())
 
     def test_article_payload_only_in_data_never_compiled_source(self):
         body = ('# Synthetic\n\n{{ globalThis.__articleAttack = 49 }}\n'
@@ -115,7 +139,7 @@ class ModernSiteTests(unittest.TestCase):
         self.assertFalse(self.output.exists())
 
     def test_article_symlink_refused(self):
-        (self.repo / 'publish_articles/fixture.md').symlink_to(self.repo / 'index.html')
+        (self.repo / 'publish_articles/fixture.md').symlink_to(self.put('unapproved.txt', 'Not approved'))
         with self.assertRaises(ValueError): self.staged()
 
     def test_output_parent_symlink_refused(self):
@@ -130,29 +154,17 @@ class ModernSiteTests(unittest.TestCase):
         files = {p.relative_to(self.output).as_posix() for p in self.output.rglob('*') if p.is_file()}
         self.assertEqual(files, set(modern.FRONTEND) | {'.vitepress/public-data.json'})
 
-    def test_finalizer_only_exact_outputs_and_historical_manifest(self):
+    def test_finalizer_only_exact_generated_outputs(self):
+        self.article()
         dist, receipt = self.fake_dist()
         modern.finalize(self.repo, dist, receipt, self.output)
-        self.assertEqual((self.output / 'css/style.css').read_bytes(), (self.repo / 'css/style.css').read_bytes())
-        self.assertTrue((self.output / '.nojekyll').is_file())
+        self.assertEqual(modern.published_tree(self.output), {**modern.tree(dist), '.nojekyll': b''})
+        self.assertTrue((self.output / 'wiki/fixture/index.html').is_file())
         self.assertFalse((self.output / 'publish_articles').exists())
 
-    def test_legacy_relocation_preserves_fragments_and_root_resolution(self):
-        dist, receipt = self.fake_dist()
-        modern.finalize(self.repo, dist, receipt, self.output)
-        doc = Document((self.output / 'legacy/index.html').read_text())
-        self.assertEqual(doc.attributes('base'), [{'href': '/'}])
-        links = [a['href'] for a in doc.attributes('a')]
-        self.assertEqual(links, ['/legacy/index.html#anchor', '2016/post/', '/'])
-        self.assertEqual(urljoin('https://example.test/', links[1]), 'https://example.test/2016/post/')
-
-    def test_downloads_are_pinned_github_not_false_legacy_urls(self):
-        for item in self.staged()['downloads']:
-            self.assertIn('/blob/' + modern.BASE_COMMIT + '/', item['url'])
-            self.assertFalse(item['url'].startswith('/'))
-
     def test_artifact_pollution_fails_without_writes(self):
-        for extra in ('test.py', 'private.json', 'Demo.exe', 'main.cpp', 'assets/hidden.js', '.git/config'):
+        for extra in ('test.py', 'private.json', 'Demo.exe', 'main.cpp', 'assets/hidden.js', '.git/config',
+                      'legacy/index.html', 'archive/index.html', '2016/post/index.html', 'css/style.css'):
             with self.subTest(extra=extra):
                 dist, receipt = self.fake_dist()
                 p = dist / extra
@@ -162,19 +174,28 @@ class ModernSiteTests(unittest.TestCase):
                 self.assertFalse(self.output.exists())
                 shutil.rmtree(dist)
 
-    def test_receipt_cannot_authorize_checkout_files(self):
+    def test_receipt_cannot_authorize_checkout_or_legacy_files(self):
         dist, receipt = self.fake_dist()
-        for name in ('private.json', 'scripts/tool.js', 'assets/main.cpp', 'assets/tool.exe', 'unexpected.html'):
-            inventory = json.loads(receipt.read_text())
-            inventory['files'][name] = modern.digest(b'pollution')
-            receipt.write_text(json.dumps(inventory))
-            with self.assertRaises(ValueError): modern.finalize(self.repo, dist, receipt, self.output)
+        original = json.loads(receipt.read_text())
+        for name in ('private.json', 'scripts/tool.js', 'assets/main.cpp', 'assets/tool.exe',
+                     'unexpected.html', 'legacy/index.html', 'archive/index.html',
+                     '2016/post/index.html', 'css/style.css', 'js/script.js', 'downloads/tool.exe'):
+            with self.subTest(name=name):
+                inventory = {**original, 'files': {**original['files'], name: modern.digest(b'pollution')}}
+                receipt.write_text(json.dumps(inventory))
+                p = dist / name
+                p.parent.mkdir(parents=True, exist_ok=True)
+                p.write_bytes(b'pollution')
+                with self.assertRaisesRegex(ValueError, 'Unexpected generated route'):
+                    modern.finalize(self.repo, dist, receipt, self.output)
+                self.assertFalse(self.output.exists())
+                p.unlink()
 
     def test_artifact_file_and_directory_symlinks_rejected(self):
         dist, receipt = self.fake_dist()
         p = dist / 'assets/app.abcdef.js'
         p.unlink()
-        p.symlink_to(self.repo / 'index.html')
+        p.symlink_to(self.repo / 'site/frontend/index.md')
         with self.assertRaises(ValueError): modern.finalize(self.repo, dist, receipt, self.output)
         p.unlink()
         (dist / 'link').symlink_to(self.repo, target_is_directory=True)
@@ -224,18 +245,39 @@ class ModernSiteTests(unittest.TestCase):
         self.assertFalse(self.output.exists())
 
     def test_changed_approved_title_also_invalidates_stage(self):
+        self.article(title='Original title')
+        dist, receipt = self.fake_dist()
+        self.article(title='New approved title')
+        with self.assertRaisesRegex(ValueError, 'approved version'):
+            modern.finalize(self.repo, dist, receipt, self.output)
+        self.assertFalse(self.output.exists())
+
+    def test_receipt_bound_to_removed_legacy_projection_is_rejected(self):
         dist, receipt = self.fake_dist()
         record = json.loads(receipt.read_text())
-        record['publicDataSha256'] = '0' * 64
+        record['publicDataSha256'] = modern.digest(modern.json_bytes({
+            'articles': [], 'legacy': [], 'downloads': [],
+        }))
         receipt.write_text(json.dumps(record))
         with self.assertRaisesRegex(ValueError, 'approved version'):
             modern.finalize(self.repo, dist, receipt, self.output)
+        self.assertFalse(self.output.exists())
 
-    def test_finalize_cannot_write_into_legacy_source_directory(self):
+    def test_receipt_cannot_omit_approved_article_route(self):
+        self.article()
+        dist, receipt = self.fake_dist()
+        record = json.loads(receipt.read_text())
+        del record['files']['wiki/fixture/index.html']
+        receipt.write_text(json.dumps(record))
+        with self.assertRaisesRegex(ValueError, 'Unexpected generated route'):
+            modern.finalize(self.repo, dist, receipt, self.output)
+        self.assertFalse(self.output.exists())
+
+    def test_finalize_cannot_write_into_protected_source_directory(self):
         dist, receipt = self.fake_dist()
         with self.assertRaises(ValueError):
-            modern.finalize(self.repo, dist, receipt, self.repo / 'css/output')
-        self.assertFalse((self.repo / 'css/output').exists())
+            modern.finalize(self.repo, dist, receipt, self.repo / 'site/output')
+        self.assertFalse((self.repo / 'site/output').exists())
 
     def test_duplicate_receipt_keys_fail_closed(self):
         dist, receipt = self.fake_dist()
@@ -256,7 +298,7 @@ class ModernSiteTests(unittest.TestCase):
         with self.assertRaises(ValueError):
             modern.finalize(self.repo, link, receipt, self.output)
 
-    def test_historical_repo_inputs_are_never_changed(self):
+    def test_repo_inputs_are_never_changed(self):
         before = tree_snapshot(self.repo)
         self.staged()
         self.assertEqual(before, tree_snapshot(self.repo))

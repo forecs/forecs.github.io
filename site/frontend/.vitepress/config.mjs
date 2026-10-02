@@ -13,7 +13,7 @@ export default defineConfig({
   appearance: true,
   lastUpdated: false,
   useWebFonts: false,
-  // Never copy an arbitrary repository public/ tree. Python owns legacy assets.
+  // Never copy an arbitrary repository public/ tree. Only generated assets ship.
   vite: { publicDir: false },
   head: [['meta', { name: 'theme-color', content: '#186b60' }]],
   markdown: { html: true },
@@ -32,9 +32,7 @@ export default defineConfig({
     siteTitle: 'forecs / 笔记',
     nav: [
       { text: '首页 Home', link: '/' },
-      { text: '知识库 Wiki', link: '/wiki/', activeMatch: '^/wiki/' },
-      { text: '归档 Archive', link: '/archive/', activeMatch: '^/archive/' },
-      { text: '旧站 Legacy ↗', link: '/legacy/index.html', target: '_self' }
+      { text: '知识库 Wiki', link: '/wiki/', activeMatch: '^/wiki/' }
     ],
     sidebar: {
       '/wiki/': [
@@ -46,11 +44,7 @@ export default defineConfig({
           items: articles.length
             ? articles.map((article) => ({ text: escapeHtml(article.title), link: articlePath(article.slug) }))
             : [{ text: '暂无公开笔记 · No notes yet', link: '/wiki/' }]
-        },
-        { text: '继续探索 · Explore', items: [
-          { text: '归档与下载 · Archive & downloads', link: '/archive/' },
-          { text: '旧站首页 · Legacy home', link: '/legacy/index.html', target: '_self' }
-        ] }
+        }
       ]
     },
     outline: { label: '本页目录 · On this page', level: [2, 3] },
