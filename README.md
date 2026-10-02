@@ -1,8 +1,13 @@
 # forecs — personal wiki & learning blog
 
-This **public** repository preserves the original generated Hexo website and adds
-a standard-library-only learning-wiki builder. Unapproved drafts belong exclusively
-in **private [`forecs/wiki-review`](https://github.com/forecs/wiki-review)**.
+This **public** repository is a modern **VitePress 1.6.4-only** personal blog
+and learning wiki. The owner's decision removes all generated historical Hexo
+assets and EXE/C++ files from the current Git tree, with no legacy/archive routes
+or historical download links. Deletion does not purge Git history or caches.
+Standard-library Python helpers enforce the approved-content and isolated-artifact
+boundaries; VitePress provides the responsive frontend, dark mode and local search.
+Unapproved drafts belong exclusively in
+**private [`forecs/wiki-review`](https://github.com/forecs/wiki-review)**.
 
 ```
 private local wiki → explicit private intake → private review PR
@@ -14,20 +19,20 @@ private local wiki → explicit private intake → private review PR
                             isolated public static site
 ```
 
-**Setup is merged; the new pipeline is not active.** Both setup PRs merged on
-2026-10-02. Neither setup merge approves an article. The current native `gh`
-credential lacks `workflow` scope, and the two new workflows remain **uninstalled
-templates** in `workflow-templates/`; their hosted checks have not run.
+**Workflow files are included in this branch; deployment activation is not done.**
+The setup merges do not approve any article. Actual workflows
+`.github/workflows/wiki-checks.yml` and `.github/workflows/wiki-pages.yml` replace
+the former templates. The native `gh` credential has `repo`, `read:org`, `gist`,
+but no `workflow` scope; pushing workflow changes may be blocked. Local inclusion
+is not evidence of a successful push, merge, hosted checks or deployment.
 
-**Live deployment warning (verified after merge):** GitHub Pages is currently
-publishing the repository root from `master` using its legacy Jekyll workflow.
-[That deployment succeeded](https://github.com/forecs/forecs.github.io/actions/runs/36961685309),
-but it does **not** run `scripts/build_site.py`, enforce its output allowlist, or
-honor `WIKI_PAGES_ENABLED`. It serves the old homepage, not the new `/wiki/` site,
-and includes public repository scripts/tests and historical EXE/C++ files.
-Installing templates or leaving their opt-in unset does not stop that separate
-legacy deployment. See [the current findings and owner migration checklist](docs/wiki-pipeline.md#read-only-live-platform-findings-2026-10-02)
-before enabling the new publisher. No Pages settings were changed by verification.
+**Owner-controlled transition still required:** the last verified Pages setting
+was legacy Jekyll publishing from `master` / root, which bypasses the isolated
+builder and does not honor `WIKI_PAGES_ENABLED`. The supported publisher is now
+**GitHub Actions Pages only**, gated by default branch `master` and
+`WIKI_PAGES_ENABLED=true`. The owner separately coordinates switching Pages to
+GitHub Actions and reviewing/merging this branch; neither action is performed by
+this documentation update. See [the findings and activation checklist](docs/wiki-pipeline.md#read-only-live-platform-findings-2026-10-02).
 
 - Private approval is a **human, exact-head squash merge**, not a label, comment,
   bot review, or self-approval. GitHub cannot distinguish human/agent use of one token.
@@ -38,19 +43,36 @@ before enabling the new publisher. No Pages settings were changed by verificatio
   writes recheck visibility. No arbitrary destination is accepted.
 - Public branches/PRs expose approved content immediately, even before merge.
   Approving a private content PR therefore authorizes **public disclosure**.
-- Existing tracked website files are preserved. The builder allowlists legacy assets,
-  links the original homepage at `/legacy/`, and adds a full-text `/wiki/` listing.
+- Historical URL preservation is deliberately out of scope; the owner selected
+  modern-only publication. No compatibility acceptance blocker remains.
+- See **[VitePress migration, deployment and rollback](docs/vitepress-migration.md)**
+  and **[executed test/artifact evidence](docs/vitepress-verification.md)**.
+  Rollback is limited to a previously verified modern artifact or revision,
+  never the old Jekyll site or a Python fallback publisher.
 
 ## Local verification
 
-Python 3.12+ and the existing native GitHub CLI login; no added secret or connector.
+Python 3.12+ and Node.js 22 LTS; exact npm pins are VitePress **1.6.4** and
+Playwright **1.63.0**. The existing native GitHub CLI login is used only
+for intake/export, not static builds; no added secret or connector.
 
 ```sh
+npm ci
+npx playwright install --with-deps chromium
 python3 -m unittest discover -s tests -v
 python3 scripts/content.py
-python3 scripts/build_site.py --output _site
+npm test
+npm run build
+python3 -B scripts/audit_site.py --output _site
+python3 -m http.server 8000 --directory _site --bind 127.0.0.1
 ```
 
-Build output must be absent or empty. Never serve a checkout or private PR branch.
+`scripts/build_site.py` is a helper module only, not a standalone publisher;
+there is no Python fallback. Deploy `_site` from the isolated npm build, never
+the checkout, temporary staging tree, or VitePress sources.
+
+Initial build output must be absent or empty. Repeat npm builds replace only their
+own byte-verified output using the adjacent receipt (never deploy that receipt).
+Never serve a checkout or private PR branch.
 See **[docs/wiki-pipeline.md](docs/wiki-pipeline.md)** for approval/export commands,
-privacy boundaries, recovery, current live checks, and the activation checklist.
+privacy boundaries, recovery, dated live findings, and the activation checklist.

@@ -13,7 +13,7 @@ import wiki_export
 import wiki_intake
 import test_export
 import test_intake
-from build_site import build
+from modern_site import stage as build
 
 
 class MetadataRegressions(unittest.TestCase):
@@ -53,8 +53,6 @@ class MetadataRegressions(unittest.TestCase):
         with tempfile.TemporaryDirectory() as temp:
             root = Path(temp)
             (root / "publish_articles").mkdir()
-            (root / "site").mkdir()
-            (root / "site/legacy-files.txt").write_text("")
             (root / "publish_articles/a.md").write_bytes(b"Example\n")
             (root / "publish_articles/a.json").write_text(
                 '{"title":"Hidden","title":"Visible","sha256":"' + content.digest(b"Example\n") + '"}')

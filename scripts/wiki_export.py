@@ -19,7 +19,7 @@ commit, parent, author, title, PR text, source filename or history is copied. Pu
 branch/message/PR identifiers use a digest of public slug + JSON + Markdown only.
 Public commits use a fixed exporter identity and the PUBLIC parent's timestamp,
 so concurrent identical exports have identical objects, without private metadata.
-The public parent's tree is preserved, including legacy files. No merge, push,
+The public parent's unrelated files are preserved; export changes only its approved pair. No merge, push,
 force update, delete, checkout, arbitrary repository option or local state exists.
 
 API assumptions: authenticated github.com REST Git Data, repository and PR APIs;
