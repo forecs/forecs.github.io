@@ -969,7 +969,7 @@ class NativeTransportTests(unittest.TestCase):
     def test_arbitrary_host_or_repository_rejected_before_subprocess(self):
         with patch.object(export.subprocess, "run") as run:
             for endpoint in ("https://evil.invalid/repos/" + SRC, "//evil.invalid", "repos/evil/project",
-                             "repos/" + SRC + "-evil", "repos/" + DST + "-evil", "--hostname=evil.invalid"): 
+                             "repos/" + SRC + "-evil", "repos/" + DST + "-evil", "--hostname=evil.invalid"):
                 with self.subTest(endpoint=endpoint), self.assertRaises(ValueError):
                     export.run_api(endpoint)
             run.assert_not_called()
