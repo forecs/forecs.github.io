@@ -136,6 +136,23 @@ def _inline(text: str) -> str:
     )
 
 
+def _table_cells(line: str) -> list[str]:
+    """Split a pipe-table row; cells remain inert and are escaped by _inline."""
+    value = line.strip()
+    if value.startswith('|'):
+        value = value[1:]
+    if value.endswith('|'):
+        value = value[:-1]
+    return [cell.strip() for cell in value.split('|')]
+
+
+def _is_table_separator(line: str, columns: int) -> bool:
+    cells = _table_cells(line)
+    return len(cells) == columns and all(
+        re.fullmatch(r':?-{3,}:?', cell) for cell in cells
+    )
+
+
 def render_markdown(body: str) -> str:
     """Render the documented inert Markdown subset, never raw HTML."""
     blocks = []
@@ -158,18 +175,47 @@ def render_markdown(body: str) -> str:
             items.clear()
         list_kind = None
 
-    for line in body.splitlines():
+    lines = body.splitlines()
+    index = 0
+    while index < len(lines):
+        line = lines[index]
         if code is not None:
             if line.strip() == '```':
                 blocks.append('<pre><code>' + html.escape('\n'.join(code)) + '</code></pre>')
                 code = None
             else:
                 code.append(line)
+            index += 1
             continue
         if re.fullmatch(r'```[^`]*', line):
             flush_paragraph()
             flush_list()
             code = []  # Fence language labels are ignored, never attributes.
+            index += 1
+            continue
+        header = _table_cells(line) if '|' in line else []
+        if (header and index + 1 < len(lines)
+                and _is_table_separator(lines[index + 1], len(header))):
+            flush_paragraph()
+            flush_list()
+            rows = []
+            index += 2
+            while index < len(lines) and '|' in lines[index] and lines[index].strip():
+                cells = _table_cells(lines[index])
+                if len(cells) != len(header):
+                    break
+                rows.append(cells)
+                index += 1
+            head_html = ''.join('<th scope="col">' + _inline(cell) + '</th>' for cell in header)
+            body_html = ''.join(
+                '<tr>' + ''.join('<td>' + _inline(cell) + '</td>' for cell in row) + '</tr>'
+                for row in rows
+            )
+            blocks.append(
+                '<div class="markdown-table-scroll" tabindex="0" '
+                'aria-label="可横向滚动的表格"><table><thead><tr>' + head_html
+                + '</tr></thead><tbody>' + body_html + '</tbody></table></div>'
+            )
             continue
         heading = re.fullmatch(r'(#{1,6})[ \t]+(.+)', line)
         item = re.fullmatch(r'(?:[-+*]|[0-9]+\.)[ \t]+(.+)', line)
@@ -191,6 +237,7 @@ def render_markdown(body: str) -> str:
         else:
             flush_list()
             paragraph.append(line)
+        index += 1
     flush_paragraph()
     flush_list()
     if code is not None:
