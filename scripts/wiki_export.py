@@ -335,8 +335,9 @@ class ExportGitHub:
                 "Review this public diff before merging. No automatic merge.\n")
 
     def public_prs(self, branch):
-        query = urlencode({"head": f"forecs:{branch}", "base": DESTINATION_DEFAULT,
-                           "state": "all", "per_page": 100})
+        # Discover by head across ALL bases; filtering by the expected base
+        # would hide retargeted PRs before public_pr can reject the change.
+        query = urlencode({"head": f"forecs:{branch}", "state": "all", "per_page": 100})
         items = self.get(DESTINATION_REPO, f"pulls?{query}")
         require(isinstance(items, list) and len(items) < 100 and len(items) <= 1,
                 "ambiguous or truncated public PR history")

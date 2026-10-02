@@ -79,8 +79,14 @@ class GitHub:
         # Inspect exact base SHA, not a moving branch name.
         if all(self.remote_bytes(path, base) == value for path, value in expected.items()):
             return {"status": "already-on-default", "version": version}
+        # Include retargeted PRs so altered history cannot look like no history.
+        pulls = self.get(f"pulls?head={self.owner}:{branch}&state=all&per_page=100")
+        if not isinstance(pulls, list) or len(pulls) > 1:
+            raise ValueError("ambiguous review history; inspect manually")
         ref = self.get(f"git/ref/heads/{branch}", missing=True)
         if ref is None:
+            if pulls:
+                raise ValueError("existing review branch disappeared; inspect manually")
             parent = self.get(f"git/commits/{base}")
             tree = self.post("git/trees", {"base_tree": parent["tree"]["sha"], "tree": [
                 {"path": path, "mode": "100644", "type": "blob", "content": value.decode("utf-8")}
@@ -103,8 +109,9 @@ class GitHub:
                 or any(f["status"] not in ("added", "modified") for f in changed)
                 or any(self.remote_bytes(path, head) != value for path, value in expected.items())):
             raise ValueError("review branch was changed; refuse reuse; inspect it manually")
-        pulls = self.get(f"pulls?head={self.owner}:{branch}&base={self.default}&state=all&per_page=100")
-        if len(pulls) > 1:
+        # Re-read after object creation for a concurrently completed PR.
+        pulls = self.get(f"pulls?head={self.owner}:{branch}&state=all&per_page=100")
+        if not isinstance(pulls, list) or len(pulls) > 1:
             raise ValueError("ambiguous review history; inspect manually")
         if pulls:
             pr = pulls[0]

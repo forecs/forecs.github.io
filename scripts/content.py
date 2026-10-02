@@ -12,6 +12,15 @@ def digest(data):
     return hashlib.sha256(data).hexdigest()
 
 
+def unique_json(pairs):
+    result = {}
+    for key, value in pairs:
+        if key in result:
+            raise ValueError("duplicate JSON key")
+        result[key] = value
+    return result
+
+
 def validate_slug(slug):
     if not isinstance(slug, str) or len(slug) > 80 or not SLUG.fullmatch(slug):
         raise ValueError("invalid public slug")
@@ -77,7 +86,7 @@ def validate_articles(root: Path):
         if f"{slug}.md" not in files or f"{slug}.json" not in files:
             raise ValueError("article body/metadata pair required")
         body = files[f"{slug}.md"].read_bytes()
-        info = json.loads(files[f"{slug}.json"].read_text(encoding="utf-8"))
+        info = json.loads(files[f"{slug}.json"].read_text(encoding="utf-8"), object_pairs_hook=unique_json)
         if not isinstance(info, dict) or set(info) != {"title", "sha256"}:
             raise ValueError("only public title and content digest allowed")
         validate_title(info["title"])

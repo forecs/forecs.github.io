@@ -262,7 +262,8 @@ class FakeGitHubREST:
             if self.pr_listing is not None:
                 return self.pr_listing
             return [p for p in self.prs[repo].values()
-                    if p["head"]["ref"] == branch and p["base"]["ref"] == query["base"][0]]
+                    if p["head"]["ref"] == branch
+                    and ("base" not in query or p["base"]["ref"] == query["base"][0])]
         if path.startswith("pulls/"):
             return self.prs[repo][int(path[len("pulls/"):])]
         raise AssertionError(f"unexpected GET {repo}/{path}")
