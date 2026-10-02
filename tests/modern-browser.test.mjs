@@ -18,7 +18,10 @@ const payload = '# Fixture heading\n\nSyntheticNeedle784 cobalt network 知识�
   '<img src="https://invalid.example/attack" onerror="globalThis.__articleAttack=2">\n' +
   '<iframe srcdoc="<script>alert(1)</script>"></iframe>\n' +
   '<!-- @include: ../../PRIVATE_SENTINEL.md -->\n\n---\nlayout: home\n---\n' +
-  '[run](javascript:alert(1))\n\n```vue\n<script>globalThis.__articleAttack=3</script>\n```\n'
+  '[run](javascript:alert(1))\n\n| Product | Capability | Context |\n| --- | --- | --- |\n' +
+  '| Windows Firewall | Host filtering | `<safe>` |\n' +
+  '| Azure Firewall | Workload inspection | <img src=x onerror=alert(4)> |\n\n' +
+  '```vue\n<script>globalThis.__articleAttack=3</script>\n```\n'
 const hostileTitle = 'Synthetic </script><img src=x onerror=alert(1)> {{ 7 * 7 }}'
 let fixture, server, origin, browser
 const errors = []
@@ -146,6 +149,12 @@ test('mobile home and wiki have no horizontal overflow and usable navigation', a
     await page.goto(origin + route, { waitUntil: 'networkidle' })
     assert.ok(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth + 1), route)
   }
+  const table = page.locator('.markdown-table-scroll')
+  assert.equal(await table.locator('table').count(), 1)
+  assert.equal(await table.locator('th').count(), 3)
+  assert.equal(await table.locator('td').count(), 6)
+  assert.ok(await table.evaluate(el => el.scrollWidth > el.clientWidth))
+  assert.equal(await table.locator('img, script, iframe').count(), 0)
   await page.locator('.VPNavBarHamburger').click()
   assert.ok(await page.locator('.VPNavScreen').isVisible())
   await page.close()

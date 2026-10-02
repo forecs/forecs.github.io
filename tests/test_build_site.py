@@ -207,6 +207,25 @@ class CoreTests(unittest.TestCase):
         self.assertIn('<script>alert(1)</script>',doc.text)
         self.assertNotIn('script',[t for t,_ in doc.elements])
 
+    def test_markdown_table_is_structured_inert_and_accessible(self):
+        body='| Product | Capability |\n| :--- | ---: |\n| Azure `<FW>` | <img src=x onerror=alert(1)> |\n'
+        rendered=build_site.render_markdown(body)
+        doc=Document(rendered)
+        tags=[tag for tag,_ in doc.elements]
+        for tag in ('div','table','thead','tbody','tr','th','td','code'):
+            self.assertIn(tag,tags)
+        self.assertIn(('div', {'class':'markdown-table-scroll','tabindex':'0',
+                               'aria-label':'可横向滚动的表格'}),doc.elements)
+        self.assertIn(('th', {'scope':'col'}),doc.elements)
+        self.assertIn('<img src=x onerror=alert(1)>',doc.text)
+        self.assertNotIn('img',tags)
+
+    def test_malformed_table_stays_literal(self):
+        body='| A | B |\n| -- | --- |\n| one | two |\n'
+        doc=Document(build_site.render_markdown(body))
+        self.assertEqual({tag for tag,_ in doc.elements},{'p'})
+        self.assertIn('| A | B |',doc.text)
+
     def test_all_active_syntax_is_literal(self):
         literals=['<script>alert(1)</script>', '<img src=x onerror=alert(1)>', '<iframe src="https://evil.invalid"></iframe>',
                   '<svg onload=alert(1)></svg>', '[link](javascript:alert(1))', '![pixel](https://evil.invalid)',

@@ -111,6 +111,20 @@ a, button, input { -webkit-tap-highlight-color: transparent; }
 .article-body { margin-top: 32px; overflow-wrap: anywhere; }
 .article-body pre { padding: 18px; overflow-x: auto; background: var(--vp-c-bg-soft); border: 1px solid var(--vp-c-divider); border-radius: 10px; }
 .article-body pre code { padding: 0; background: none; color: var(--vp-c-text-1); font-size: 13px; white-space: pre; }
+.markdown-table-scroll {
+  max-width: 100%;
+  margin: 24px 0;
+  overflow-x: auto;
+  border: 1px solid var(--vp-c-divider);
+  border-radius: 12px;
+  -webkit-overflow-scrolling: touch;
+}
+.markdown-table-scroll:focus-visible { outline: 3px solid var(--vp-c-brand-1); outline-offset: 3px; }
+.article-body .markdown-table-scroll table { display: table; width: max-content; min-width: 100%; margin: 0; border: 0; }
+.article-body .markdown-table-scroll th,
+.article-body .markdown-table-scroll td { min-width: 150px; padding: 12px 14px; vertical-align: top; line-height: 1.65; }
+.article-body .markdown-table-scroll th { position: sticky; top: 0; background: var(--vp-c-bg-soft); font-weight: 650; text-align: left; }
+.article-body .markdown-table-scroll tr:last-child td { border-bottom: 0; }
 .article-return { margin-top: 40px; padding-top: 24px; border-top: 1px solid var(--vp-c-divider); font-size: 14px; }
 .VPSidebarItem .text { overflow-wrap: anywhere; }
 
