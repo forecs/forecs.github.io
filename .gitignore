@@ -1,0 +1,5 @@
+# Local builds and Python caches; intake state is stored under .git/.
+_site/
+__pycache__/
+*.py[cod]
+.venv/
