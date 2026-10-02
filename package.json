@@ -1,0 +1,14 @@
+{
+  "name": "forecs-public-notes",
+  "version": "1.0.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "build": "python3 -B scripts/modern_site.py build --output _site",
+    "test": "python3 -B -m unittest discover -s tests && node --test tests/modern-browser.test.mjs"
+  },
+  "devDependencies": {
+    "vitepress": "1.6.4",
+    "@playwright/test": "1.63.0"
+  }
+}

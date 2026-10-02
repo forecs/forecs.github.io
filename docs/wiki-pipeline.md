@@ -1,5 +1,16 @@
 # Private review → approved export → public learning wiki
 
+## VitePress frontend migration
+
+The frontend modernization is based on `origin/master`
+`8b9d85c82f47146a27668a3536a118dfc4a2fc47`, which includes the public setup and
+follow-up fixes described below. It preserves this approval/export protocol and
+adds a stable VitePress frontend behind isolated Python staging and artifact
+validation. See [the migration/deployment/rollback runbook](vitepress-migration.md)
+for current build commands and the explicit historical download-URL exception.
+The dated verification sections below are historical evidence, not a claim that
+the VitePress frontend has been deployed or hosted checks have run.
+
 ## Installation status (2026-10-02)
 
 The owner made `forecs/forecs.github.io` **public** and explicitly selected a
@@ -188,8 +199,13 @@ or put a heading first.
 The renderer supports headings, paragraphs, basic lists, fenced code and single
 backticks. Other markup, raw HTML, template expressions, links/images stay escaped
 text; article content cannot execute scripts, styles, templates, shell, YAML,
-plugins or network requests. Full-text `/wiki/` supports browser Find. Trusted
-local CSS provides responsive light/dark styling.
+plugins or network requests. The Python-only fallback supports browser Find.
+The VitePress path retains this inert article contract while adding local search,
+responsive navigation and light/dark mode; its trusted theme/runtime is executable
+code, but article text is not. Run `npm ci`, `npm test` and `npm run build` for the
+modern site; `python3 scripts/build_site.py --output _site-python` remains the
+standard-library basic fallback. See the migration runbook for isolated staging
+and generated-runtime artifact rules.
 
 The builder rejects symlinks, unsafe paths, unexpected metadata/files, digest
 mismatches and nonempty output. Only validated articles and `site/legacy-files.txt`
@@ -275,9 +291,11 @@ human approval boundary:
 - Both validators previously accepted duplicate JSON keys that export rejects.
   They now reject duplicate title/digest keys, including escaped spellings.
 
-The follow-up public suite passes **330 tests**; the matching private validator
-follow-up passes **8**. This is fix-branch evidence, not a claim that fixes have
-already reached either default branch. Human review/merge remains required.
+The follow-up public suite passed **330 tests**; the matching private validator
+follow-up passed **8** at verification. The public fixes are now included in the
+VitePress migration base `8b9d85c`; that does not establish the current private
+branch state or authorize any content approval. Human review/merge remains
+required for each subsequent change.
 
 Read-only native API checks validate both repository identities, exact default
 refs, commit/recursive-tree contracts and zero article pairs. Export dry-run

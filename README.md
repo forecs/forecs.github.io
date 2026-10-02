@@ -1,7 +1,9 @@
 # forecs — personal wiki & learning blog
 
 This **public** repository preserves the original generated Hexo website and adds
-a standard-library-only learning-wiki builder. Unapproved drafts belong exclusively
+a responsive **VitePress 1.6.4** personal blog and learning wiki. A standard-library
+Python validator/stager enforces the existing approved-content boundary; VitePress
+provides the modern frontend, dark mode, mobile navigation and local search. Unapproved drafts belong exclusively
 in **private [`forecs/wiki-review`](https://github.com/forecs/wiki-review)**.
 
 ```
@@ -38,19 +40,37 @@ before enabling the new publisher. No Pages settings were changed by verificatio
   writes recheck visibility. No arbitrary destination is accepted.
 - Public branches/PRs expose approved content immediately, even before merge.
   Approving a private content PR therefore authorizes **public disclosure**.
-- Existing tracked website files are preserved. The builder allowlists legacy assets,
-  links the original homepage at `/legacy/`, and adds a full-text `/wiki/` listing.
+- Existing tracked website files (including historical binaries/source) are preserved
+  byte-for-byte in Git. The builder allowlists legacy web assets, keeps article and
+  archive URLs, links the original homepage at `/legacy/`, and adds `/wiki/` local search.
+- The old `.exe`/`.cpp` Pages URLs conflict with the no-binaries/source artifact
+  boundary: they are excluded from Pages and linked on GitHub instead. Owner
+  acceptance or an external redirect solution is required before deployment.
+- See **[VitePress migration, deployment and rollback](docs/vitepress-migration.md)**
+  and **[executed test/artifact evidence](docs/vitepress-verification.md)**.
+  No Pages settings or active workflows are changed by this frontend migration.
 
 ## Local verification
 
-Python 3.12+ and the existing native GitHub CLI login; no added secret or connector.
+Python 3.12+ and Node.js 22 LTS. The existing native GitHub CLI login is used only
+for intake/export, not static builds; no added secret or connector.
 
 ```sh
+npm ci
+npx playwright install --with-deps chromium
 python3 -m unittest discover -s tests -v
 python3 scripts/content.py
-python3 scripts/build_site.py --output _site
+npm test
+npm run build
+python3 -m http.server 8000 --directory _site --bind 127.0.0.1
 ```
 
-Build output must be absent or empty. Never serve a checkout or private PR branch.
+The Python-only basic fallback remains available as
+`python3 scripts/build_site.py --output _site-python`. Deploy `_site` from the
+isolated npm build, never the checkout, temporary staging tree, or VitePress sources.
+
+Initial build output must be absent or empty. Repeat npm builds replace only their
+own byte-verified output using the adjacent receipt (never deploy that receipt).
+Never serve a checkout or private PR branch.
 See **[docs/wiki-pipeline.md](docs/wiki-pipeline.md)** for approval/export commands,
 privacy boundaries, recovery, current live checks, and the activation checklist.

@@ -3,3 +3,8 @@ _site/
 __pycache__/
 *.py[cod]
 .venv/
+node_modules/
+_build-temp-*/
+_site.build-receipt.json
+playwright-report/
+test-results/
