@@ -30,7 +30,8 @@ class ArtifactAuditTests(unittest.TestCase):
     def test_exact_modern_output(self):
         self.write()
         self.assertEqual(audit_site.audit(self.repo, self.out)['pages'],
-                         ['404.html', 'index.html', 'wiki/index.html'])
+                         ['404.html', 'index.html',
+                          'talks/ai-work-efficiency/index.html', 'wiki/index.html'])
 
     def test_receipt_cannot_authorize_retired_routes_or_raw_sources(self):
         for name in ('legacy/index.html', 'archive/index.html', 'archives/index.html',
