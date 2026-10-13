@@ -2,6 +2,7 @@ import DefaultTheme from 'vitepress/theme'
 import ApprovedArticle from './components/ApprovedArticle.vue'
 import ArticleIndex from './components/ArticleIndex.vue'
 import HomeOverview from './components/HomeOverview.vue'
+import AiWorkPresentation from './components/AiWorkPresentation.vue'
 import './style.css'
 
 export default {
@@ -10,5 +11,6 @@ export default {
     app.component('ApprovedArticle', ApprovedArticle)
     app.component('ArticleIndex', ArticleIndex)
     app.component('HomeOverview', HomeOverview)
+    app.component('AiWorkPresentation', AiWorkPresentation)
   }
 }
