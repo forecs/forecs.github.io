@@ -31,13 +31,16 @@ except ImportError:
 BuildError = core.BuildError
 # Reviewed trusted frontend inputs, not a glob over site/ or the checkout.
 FRONTEND = (
-    'index.md', 'wiki/index.md',
+    'index.md', 'wiki/index.md', 'talks/ai-work-efficiency/index.md',
     '.vitepress/config.mjs', '.vitepress/theme/index.js',
     '.vitepress/theme/style.css', '.vitepress/shared.mjs', '.vitepress/theme/data.js',
     '.vitepress/theme/components/HomeOverview.vue', '.vitepress/theme/components/ArticleIndex.vue',
     '.vitepress/theme/components/ApprovedArticle.vue',
+    '.vitepress/theme/components/AiWorkPresentation.vue',
+    '.vitepress/theme/components/ai-work-slides.js',
+    '.vitepress/theme/components/ai-work-presentation.css',
 )
-FIXED_OUTPUT = {'index.html', 'wiki/index.html',
+FIXED_OUTPUT = {'index.html', 'wiki/index.html', 'talks/ai-work-efficiency/index.html',
                 '404.html', 'hashmap.json', 'vp-icons.css'}
 ASSET = re.compile(r'assets/(?:chunks/)?[A-Za-z0-9_@.-]+\.(?:js|css|woff2?|ttf|otf|png|svg|webp|jpg)\Z')
 
