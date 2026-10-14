@@ -1,5 +1,6 @@
 """Independent post-build audit rejects even receipt-authorized source pollution."""
 import json
+import shutil
 from pathlib import Path
 import tempfile
 import unittest
@@ -12,9 +13,12 @@ class ArtifactAuditTests(unittest.TestCase):
         self.addCleanup(temp.cleanup)
         self.repo = Path(temp.name)
         (self.repo / 'publish_articles').mkdir()
+        shutil.copytree(Path(__file__).resolve().parents[1] / 'site/frontend/talks/ai-work-practice',
+                        self.repo / 'site/frontend/talks/ai-work-practice')
         self.out = self.repo / 'output'
         self.out.mkdir()
         self.files = {name: b'fixture' for name in modern.FIXED_OUTPUT}
+        self.files.update(modern.static_files(self.repo))
         self.files['.nojekyll'] = b''
         self.files['assets/app.123.js'] = b'public runtime'
 
@@ -31,7 +35,8 @@ class ArtifactAuditTests(unittest.TestCase):
         self.write()
         self.assertEqual(audit_site.audit(self.repo, self.out)['pages'],
                          ['404.html', 'index.html',
-                          'talks/ai-work-efficiency/index.html', 'wiki/index.html'])
+                          'talks/ai-work-efficiency/index.html',
+                          'talks/ai-work-practice/index.html', 'wiki/index.html'])
 
     def test_receipt_cannot_authorize_retired_routes_or_raw_sources(self):
         for name in ('legacy/index.html', 'archive/index.html', 'archives/index.html',
@@ -48,6 +53,12 @@ class ArtifactAuditTests(unittest.TestCase):
                     parent.rmdir()
                     parent = parent.parent
                 del self.files[name]
+
+    def test_receipt_cannot_authorize_changed_standalone_page(self):
+        self.files['talks/ai-work-practice/index.html'] = b'<script>unreviewed()</script>'
+        self.write()
+        with self.assertRaisesRegex(ValueError, 'differs from reviewed frontend'):
+            audit_site.audit(self.repo, self.out)
 
     def test_digest_tampering(self):
         self.write()

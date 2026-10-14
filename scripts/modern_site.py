@@ -42,11 +42,29 @@ FRONTEND = (
 )
 FIXED_OUTPUT = {'index.html', 'wiki/index.html', 'talks/ai-work-efficiency/index.html',
                 '404.html', 'hashmap.json', 'vp-icons.css'}
+# Owner-authorized reviewed executable frontend, NOT approved article data.
+# Exact source, destination and bytes only; no directory/glob copying or publicDir.
+STATIC_PAGES = {
+    'talks/ai-work-practice/index.html': (
+        'talks/ai-work-practice/index.html',
+        'ec4a5e5b0daf89bb742e3bc223814dcf6e9421d290f30dfa0273324a310d238b',
+    ),
+}
 ASSET = re.compile(r'assets/(?:chunks/)?[A-Za-z0-9_@.-]+\.(?:js|css|woff2?|ttf|otf|png|svg|webp|jpg)\Z')
 
 
 def digest(data):
     return hashlib.sha256(data).hexdigest()
+
+
+def static_files(repo):
+    files = {}
+    for destination, (source, reviewed_digest) in STATIC_PAGES.items():
+        data = core._read_bytes(repo / 'site/frontend' / source)
+        if digest(data) != reviewed_digest:
+            raise BuildError('Reviewed standalone frontend digest mismatch')
+        files[destination] = data
+    return files
 
 
 def json_bytes(value):
@@ -157,6 +175,9 @@ def finalized_files(repo, dist, receipt):
         raise BuildError('Unexpected generated route or non-asset output')
     files = tree(dist)
     check_receipt(files, inventory)
+    # Add byte-pinned trusted pages only AFTER checking the closed Rollup tree.
+    # A receipt-authorized generated file cannot impersonate this static route.
+    files.update(static_files(repo))
     files['.nojekyll'] = b''
     return files
 

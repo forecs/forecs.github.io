@@ -50,6 +50,22 @@ this documentation update. See [the findings and activation checklist](docs/wiki
   Rollback is limited to a previously verified modern artifact or revision,
   never the old Jekyll site or a Python fallback publisher.
 
+## Standalone presentation
+
+[AI 工作实践分享](https://forecs.github.io/talks/ai-work-practice/) is a
+separately owner-authorized, reviewed HTML frontend, linked from the homepage.
+It preserves the supplied layout, embedded images and presentation controls;
+three screenshots have irreversible privacy redactions, noted in the speaker
+notes. The existing `/talks/ai-work-efficiency/` presentation is unchanged.
+
+The isolated finalizer copies only this exact source/destination with its
+reviewed SHA-256 pin in `scripts/modern_site.py`. It is not article data, is
+never sent through the Markdown/Vue compiler, and does not enable `publicDir`,
+HTML article rendering or arbitrary static-file copying. Independent artifact
+audit verifies the page bytes against that reviewed source; future updates
+require a fresh full executable/content/image review and an exact digest update.
+No publication workflow, permissions or deployment configuration changes.
+
 ## Local verification
 
 Python 3.12+ and Node.js 22 LTS; exact npm pins are VitePress **1.6.4** and

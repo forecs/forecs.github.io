@@ -16,6 +16,12 @@ import { articles } from '../data.js'
         <p>公开笔记的入口，支持本地全文搜索。<span lang="en">Browse public notes and search their full text locally.</span></p>
         <span class="card-cta">浏览笔记 · Browse notes <span aria-hidden="true">↗</span></span>
       </a>
+      <a class="explore-card" :href="withBase('/talks/ai-work-practice/')" target="_blank" rel="noopener noreferrer">
+        <span class="card-number" aria-hidden="true">02 / TALK</span>
+        <h3>AI 工作实践分享 <span lang="en">Making tasks reliable.</span></h3>
+        <p>资源预算、工作流与实践学习：独立交互演示。<span lang="en">An interactive presentation on budgets, workflows and learning by doing.</span></p>
+        <span class="card-cta">打开演示 · Open presentation <span aria-hidden="true">↗</span></span>
+      </a>
     </div>
     <div v-if="!articles.length" class="home-empty">
       <span class="status-dot" aria-hidden="true" />
