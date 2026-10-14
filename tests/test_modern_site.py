@@ -158,7 +158,8 @@ class ModernSiteTests(unittest.TestCase):
         self.article()
         dist, receipt = self.fake_dist()
         modern.finalize(self.repo, dist, receipt, self.output)
-        self.assertEqual(modern.published_tree(self.output), {**modern.tree(dist), '.nojekyll': b''})
+        self.assertEqual(modern.published_tree(self.output), {
+            **modern.tree(dist), **modern.static_files(self.repo), '.nojekyll': b''})
         self.assertTrue((self.output / 'wiki/fixture/index.html').is_file())
         self.assertFalse((self.output / 'publish_articles').exists())
 
@@ -302,6 +303,43 @@ class ModernSiteTests(unittest.TestCase):
         before = tree_snapshot(self.repo)
         self.staged()
         self.assertEqual(before, tree_snapshot(self.repo))
+
+    def test_standalone_frontend_not_article_data_or_compiled_source(self):
+        self.assertEqual(self.staged(), {'articles': []})
+        self.assertFalse((self.output / 'talks/ai-work-practice/index.html').exists())
+        self.put('site/frontend/talks/unreviewed/index.html', '<script>bad()</script>')
+        dist, receipt = self.fake_dist()
+        output = self.base / 'final'
+        modern.finalize(self.repo, dist, receipt, output)
+        self.assertEqual((output / 'talks/ai-work-practice/index.html').read_bytes(),
+                         (ROOT / 'site/frontend/talks/ai-work-practice/index.html').read_bytes())
+        self.assertFalse((output / 'talks/unreviewed').exists())
+
+    def test_changed_standalone_frontend_refused_before_writes(self):
+        self.put('site/frontend/talks/ai-work-practice/index.html', 'Changed')
+        dist, receipt = self.fake_dist()
+        with self.assertRaisesRegex(ValueError, 'standalone frontend digest'):
+            modern.finalize(self.repo, dist, receipt, self.output)
+        self.assertFalse(self.output.exists())
+
+    def test_standalone_source_symlink_refused(self):
+        p = self.repo / 'site/frontend/talks/ai-work-practice/index.html'
+        p.unlink()
+        p.symlink_to(ROOT / 'site/frontend/talks/ai-work-practice/index.html')
+        with self.assertRaises(ValueError): modern.static_files(self.repo)
+
+    def test_rollup_receipt_cannot_impersonate_standalone_route(self):
+        dist, receipt = self.fake_dist()
+        name = 'talks/ai-work-practice/index.html'
+        p = dist / name
+        p.parent.mkdir(parents=True, exist_ok=True)
+        p.write_bytes(b'Impersonated')
+        record = json.loads(receipt.read_text())
+        record['files'][name] = modern.digest(p.read_bytes())
+        receipt.write_text(json.dumps(record))
+        with self.assertRaisesRegex(ValueError, 'Unexpected generated route'):
+            modern.finalize(self.repo, dist, receipt, self.output)
+        self.assertFalse(self.output.exists())
 
 
 if __name__ == '__main__':

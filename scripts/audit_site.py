@@ -37,12 +37,16 @@ def audit(repo, output):
     files = modern.published_tree(output)
     receipt = modern.read_json(output.with_name(output.name + '.build-receipt.json'))
     modern.check_receipt(files, receipt)
-    expected = modern.FIXED_OUTPUT | {'.nojekyll'} | {
+    standalone = modern.static_files(repo)
+    expected = modern.FIXED_OUTPUT | set(standalone) | {'.nojekyll'} | {
         f"wiki/{a['slug']}/index.html" for a in modern.core._approved(repo)
     }
     if not expected <= set(files) or any(
             name not in expected and not modern.ASSET.fullmatch(name) for name in files):
         raise modern.BuildError('Artifact contains an unexpected route or source file')
+    for name, reviewed_bytes in standalone.items():
+        if files[name] != reviewed_bytes:
+            raise modern.BuildError('Standalone artifact differs from reviewed frontend')
     for name, data in files.items():
         if name.endswith(('.html', '.js', '.css', '.json')):
             if str(repo).encode() in data or b'_build-temp-' in data:
