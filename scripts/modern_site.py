@@ -47,7 +47,7 @@ FIXED_OUTPUT = {'index.html', 'wiki/index.html', 'talks/ai-work-efficiency/index
 STATIC_PAGES = {
     'talks/ai-work-practice/index.html': (
         'talks/ai-work-practice/index.html',
-        'a96d12d5dbb9c310ee9e0dba8e2ea5cd8c956bfc92ffac3454a07d709fdab206',
+        'e2cc226756b94384ac889e46a1fa25d46e60e5cc9174082f9afd75b284d4ce1b',
     ),
 }
 ASSET = re.compile(r'assets/(?:chunks/)?[A-Za-z0-9_@.-]+\.(?:js|css|woff2?|ttf|otf|png|svg|webp|jpg)\Z')
