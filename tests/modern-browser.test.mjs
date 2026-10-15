@@ -256,6 +256,50 @@ test('standalone presentation retains reviewed bytes, embedded images and steppe
   await page.close()
 })
 
+test('reading hook connects to existing cases without adding slides or clipping text', async () => {
+  for (const viewport of [{ width: 1440, height: 1000 }, { width: 390, height: 844 }, { width: 844, height: 390 }]) {
+    const page = await pageAt('/talks/ai-work-practice/#slide=7&step=0', viewport)
+    await page.emulateMedia({ reducedMotion: 'reduce' })
+    assert.equal(await page.locator('.slide').count(), 10)
+    assert.ok(await page.locator('.book-hook').isVisible())
+    assert.match(await page.locator('.book-hook h2').innerText(), /熟悉的方法，\n会不会限制了我们？/)
+    assert.match(await page.locator('.book-card').innerText(), /成长的边界/)
+    assert.match(await page.locator('.book-card').getAttribute('aria-label'), /非实体书封面/)
+    assert.equal(await page.locator('.canvas-reveal').evaluate(el => el.inert), true)
+    await page.keyboard.press('n')
+    const notes = await page.locator('#notes-content').innerText()
+    assert.match(notes, /讲者提供的概括，未核对为书中逐字原文或页码/)
+    assert.match(notes, /第 12 章“刻意的初学者”/)
+    assert.match(notes, /本页 3 分钟/)
+    await page.keyboard.press('Escape')
+    await page.locator('#next').click()
+    assert.equal(await page.locator('.book-hook').isVisible(), false)
+    assert.equal(await page.locator('.canvas-reveal').evaluate(el => el.inert), false)
+    assert.match(await page.locator('.case-insight').innerText(), /CLI 只能输出文字/)
+    await page.locator('#prev').click()
+    assert.ok(await page.locator('.book-hook').isVisible())
+    // All meaningful text remains inside the fixed 1280x720 slide at both reveal states.
+    for (let step = 0; step <= 1; step++) {
+      assert.deepEqual(await page.locator('.slide.active').evaluate(slide => {
+        const frame = slide.getBoundingClientRect()
+        return [...slide.querySelectorAll('p,h2')].filter(el => {
+          const r = el.getBoundingClientRect()
+          return el.checkVisibility({ checkOpacity: true }) && (r.left < frame.left - 1 || r.right > frame.right + 1 || r.top < frame.top - 1 || r.bottom > frame.bottom + 1 || el.scrollWidth > el.clientWidth + 1)
+        }).map(el => el.textContent)
+      }), [])
+      if (step === 0) await page.locator('#next').click()
+    }
+    await page.locator('#next').click()
+    assert.match(await page.locator('.slide.active .context').innerText(), /GUI 点击不通/)
+    assert.match(await page.locator('.slide.active .case-result').innerText(), /拖拽临时规避/)
+    await page.locator('#next').click()
+    assert.match(await page.locator('.slide.active h2').innerText(), /刻意的初学者/)
+    assert.match(await page.locator('.slide.active .steps').innerText(), /放下预设，换种方法/)
+    assert.ok(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth + 1))
+    await page.close()
+  }
+})
+
 test('standalone mobile layout, touch navigation and screenshot dialogs work', async () => {
   const page = await pageAt('/talks/ai-work-practice/', { width: 390, height: 844 })
   assert.ok(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth + 1))
