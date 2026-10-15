@@ -253,6 +253,14 @@ test('standalone presentation retains reviewed bytes, embedded images and steppe
   await page.waitForFunction(() => !document.fullscreenElement)
   await page.emulateMedia({ media: 'print' })
   assert.ok(await page.locator('.slide').evaluateAll(slides => slides.every(s => getComputedStyle(s).display === 'block')))
+  assert.equal(await page.locator('#live-status').isVisible(), false)
+  for (const step of [0, 1]) {
+    await page.goto(origin + `/talks/ai-work-practice/#slide=7&step=${step}`, { waitUntil: 'networkidle' })
+    await page.reload({ waitUntil: 'networkidle' })
+    const pdf = await page.pdf({ preferCSSPageSize: true, printBackground: true })
+    assert.equal([...pdf.toString('latin1').matchAll(/\/Type\s*\/Page\b/g)].length, 10,
+      'The actual print PDF must contain ten pages, without a blank tail page')
+  }
   await page.close()
 })
 
